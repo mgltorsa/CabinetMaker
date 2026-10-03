@@ -1,28 +1,13 @@
 /**
  * CAM: nested sheet → toolpaths → G-code (G21). Preview only; output must be
- * simulated before running on a machine. Stub — the CAM work stream implements this.
+ * simulated before running on a machine.
+ *
+ * Frames: ops are in panel space; toolpaths are in sheet/machine space with
+ * Z = 0 at the top of stock (face A up). See `transform.ts` for the exact
+ * panel → sheet mapping of rotated placements.
  */
-import type { CamResult, Machine, Part, Sheet, Tool, Toolpath } from '@/core/types'
-
-export interface CamInput {
-  sheet: Sheet
-  /** Parts by id (at least every part placed on the sheet). */
-  parts: ReadonlyMap<string, Part>
-  machine: Machine
-  tools: Tool[]
-}
-
-export function generateToolpaths(input: CamInput): CamResult {
-  return { sheetId: input.sheet.id, toolpaths: [], manualOps: [], warnings: [] }
-}
-
-export interface GcodeOptions {
-  programName: string
-}
-
-export function emitGcode(toolpaths: Toolpath[], machine: Machine, tools: Tool[], options: GcodeOptions): string {
-  void toolpaths
-  void machine
-  void tools
-  return `(${options.programName})\n(CAM not implemented)\n`
-}
+export { generateToolpaths } from './generate'
+export { emitGcode } from './gcode'
+export { parseGcode } from './parse'
+export { panelToSheet } from './transform'
+export type { CamInput, GcodeOptions, ParsedPolyline, ParsedProgram, ParsedToolChange } from './types'
