@@ -6,7 +6,20 @@
 import { useStore } from 'zustand'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createProject } from '@/core/defaults'
-import type { BayKind, Cabinet, CabinetType, ConstructionMethod, EstimateSettings, Id, Machine, NestSettings, Project, Tool, UnitSystem } from '@/core/types'
+import type {
+  BayKind,
+  Cabinet,
+  CabinetType,
+  ConstructionMethod,
+  EstimateSettings,
+  Id,
+  Machine,
+  NestSettings,
+  Project,
+  SlideMount,
+  Tool,
+  UnitSystem,
+} from '@/core/types'
 import { createPreset } from '@/engine/presets'
 import { browserStorage, loadProject } from './persistence'
 import * as ops from './projectOps'
@@ -42,6 +55,8 @@ export interface DesignerActions {
   updateConstruction: (id: Id, patch: Partial<ConstructionMethod>) => void
   updateCabinetHardware: (id: Id, patch: Parameters<typeof ops.updateCabinetHardware>[2]) => void
   updateCabinetTop: (id: Id, patch: Parameters<typeof ops.updateCabinetTop>[2]) => void
+  /** Change the slide mount and keep the chosen slide consistent with it. */
+  setSlideMount: (id: Id, mount: SlideMount) => void
 
   addSection: (cabinetId: Id) => void
   removeSection: (cabinetId: Id, sectionId: Id) => void
@@ -95,6 +110,7 @@ export function createDesignerStore(initial: Project = createProject()): Designe
       addCabinetFromPreset: (type) =>
         set((s) => {
           const project = ops.addCabinet(s.project, createPreset(type))
+          if (project === s.project) return {}
           return { project, selectedCabinetId: project.cabinets.at(-1)?.id ?? s.selectedCabinetId }
         }),
       duplicateCabinet: (id) =>
@@ -116,6 +132,7 @@ export function createDesignerStore(initial: Project = createProject()): Designe
       updateConstruction: (id, patch) => edit((p) => ops.updateConstruction(p, id, patch)),
       updateCabinetHardware: (id, patch) => edit((p) => ops.updateCabinetHardware(p, id, patch)),
       updateCabinetTop: (id, patch) => edit((p) => ops.updateCabinetTop(p, id, patch)),
+      setSlideMount: (id, mount) => edit((p) => ops.setSlideMount(p, id, mount)),
 
       addSection: (cabinetId) => edit((p) => ops.addSection(p, cabinetId)),
       removeSection: (cabinetId, sectionId) => edit((p) => ops.removeSection(p, cabinetId, sectionId)),

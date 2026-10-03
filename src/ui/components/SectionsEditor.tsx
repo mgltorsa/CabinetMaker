@@ -1,6 +1,7 @@
 'use client'
 
 import type { Bay, BayKind, Cabinet, Section, UnitSystem } from '@/core/types'
+import { MAX_BAYS, MAX_SECTIONS, MAX_SHELVES, SECTION_SIZE } from '../lib/limits'
 import { useDesigner } from '../store'
 import { NumberInput, OptionalLengthInput, SelectField, type SelectOption } from './fields'
 
@@ -19,8 +20,6 @@ const HINGE_SIDES: SelectOption<Bay['hingeSide']>[] = [
   { value: 'left', label: 'Hinged left' },
   { value: 'right', label: 'Hinged right' },
 ]
-
-const MAX_SHELVES = 20
 
 type BayEditorProps = {
   cabinetId: string
@@ -62,7 +61,7 @@ function BayEditor({ cabinetId, section, bay, index, units }: BayEditorProps) {
       </div>
       <div className="field-grid">
         <SelectField label={`${label} kind`} value={bay.kind} options={BAY_KINDS} onChange={(kind) => patch({ kind })} />
-        <OptionalLengthInput label={`${label} height`} value={bay.height} units={units} min={1} onCommit={(height) => patch({ height })} />
+        <OptionalLengthInput label={`${label} height`} value={bay.height} units={units} {...SECTION_SIZE} onCommit={(height) => patch({ height })} />
         {bay.kind !== 'drawer' && (
           <NumberInput label={`${label} shelves`} value={bay.shelfCount} integer min={0} max={MAX_SHELVES} onCommit={(shelfCount) => patch({ shelfCount })} />
         )}
@@ -96,6 +95,7 @@ function SectionEditor({ cabinet, section, index, units }: SectionEditorProps) {
   const addBay = useDesigner((s) => s.addBay)
   const label = `Section ${index + 1}`
   const isLast = index === cabinet.sections.length - 1
+  const isFull = section.bays.length >= MAX_BAYS
 
   return (
     <li className="section-card">
@@ -120,7 +120,13 @@ function SectionEditor({ cabinet, section, index, units }: SectionEditorProps) {
         </div>
       </div>
       <div className="field-grid">
-        <OptionalLengthInput label={`${label} width`} value={section.width} units={units} min={1} onCommit={(width) => updateSection(cabinet.id, section.id, { width })} />
+        <OptionalLengthInput
+          label={`${label} width`}
+          value={section.width}
+          units={units}
+          {...SECTION_SIZE}
+          onCommit={(width) => updateSection(cabinet.id, section.id, { width })}
+        />
       </div>
       <ol className="bays" aria-label={`${label} bays, top to bottom`}>
         {section.bays.map((bay, i) => (
@@ -130,7 +136,14 @@ function SectionEditor({ cabinet, section, index, units }: SectionEditorProps) {
       <div className="inline wrap">
         <span className="hint">Add bay:</span>
         {BAY_KINDS.map((k) => (
-          <button key={k.value} type="button" className="small" onClick={() => addBay(cabinet.id, section.id, k.value)} aria-label={`Add ${k.label.toLowerCase()} bay to ${label}`}>
+          <button
+            key={k.value}
+            type="button"
+            className="small"
+            disabled={isFull}
+            onClick={() => addBay(cabinet.id, section.id, k.value)}
+            aria-label={`Add ${k.label.toLowerCase()} bay to ${label}`}
+          >
             + {k.label}
           </button>
         ))}
@@ -155,7 +168,7 @@ export function SectionsEditor({ cabinet, units }: SectionsEditorProps) {
           <SectionEditor key={section.id} cabinet={cabinet} section={section} index={i} units={units} />
         ))}
       </ol>
-      <button type="button" className="small" onClick={() => addSection(cabinet.id)}>
+      <button type="button" className="small" disabled={cabinet.sections.length >= MAX_SECTIONS} onClick={() => addSection(cabinet.id)}>
         + Add section
       </button>
     </details>

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { fixtureProject } from '@/core/fixtures'
-import type { Project } from '@/core/types'
+import type { HardwareItem, Project } from '@/core/types'
+import { MAX_BAYS, MAX_CABINETS, MAX_SECTIONS } from './lib/limits'
+import { validateProject } from './lib/projectSchema'
 import { createDesignerStore, selectedCabinet } from './store'
 
 function setup(project: Project = fixtureProject()) {
@@ -169,6 +171,63 @@ describe('designer store: sections and bays', () => {
     expect(bays().map((b) => b.id).slice(0, 2)).toEqual(['bay_1_2', 'bay_1_1'])
     for (const b of bays()) get().removeBay('cab_1', 'sec_1', b.id)
     expect(bays()).toHaveLength(1)
+  })
+})
+
+describe('designer store: count limits keep the project valid', () => {
+  it('stops adding and duplicating cabinets at the limit', () => {
+    const { get } = setup()
+    for (let i = 0; i < MAX_CABINETS + 3; i++) get().addCabinetFromPreset('wall')
+    expect(get().project.cabinets).toHaveLength(MAX_CABINETS)
+    const before = get().project
+    get().duplicateCabinet('cab_1')
+    expect(get().project).toBe(before)
+    expect(validateProject(get().project)).toBeNull()
+  })
+
+  it('stops adding sections and bays at the limit', () => {
+    const { get, cab } = setup()
+    for (let i = 0; i < MAX_SECTIONS + 3; i++) get().addSection('cab_1')
+    expect(cab().sections).toHaveLength(MAX_SECTIONS)
+    for (let i = 0; i < MAX_BAYS + 3; i++) get().addBay('cab_1', 'sec_1', 'open')
+    expect(cab().sections[0]!.bays).toHaveLength(MAX_BAYS)
+    expect(validateProject(get().project)).toBeNull()
+  })
+})
+
+const sideSlide: HardwareItem = {
+  id: 'side-457',
+  kind: 'slide',
+  name: 'Side-mount slide 457 mm (pair)',
+  manufacturer: 'Generic',
+  sku: 'SIDE-457',
+  unitCost: 15,
+  props: { length: 457, mount: 1 },
+}
+
+/** Fixture whose catalog has only the undermount slides (plus `extra`). */
+function undermountOnly(extra: HardwareItem[] = []): Project {
+  const project = fixtureProject()
+  project.hardware = [...project.hardware.filter((h) => h.kind !== 'slide' || h.props.mount === 0), ...extra]
+  return project
+}
+
+describe('designer store: slide mount', () => {
+  it('switches the slide to one of the new mount, closest in length', () => {
+    const { get, cab } = setup(undermountOnly([{ ...sideSlide, id: 'side-305', props: { length: 305, mount: 1 } }, sideSlide]))
+    get().setSlideMount('cab_1', 'side-mount')
+    expect(cab().construction.drawer.slideMount).toBe('side-mount')
+    expect(cab().hardware.slideId).toBe('side-457')
+    get().setSlideMount('cab_1', 'undermount')
+    expect(cab().construction.drawer.slideMount).toBe('undermount')
+    expect(cab().hardware.slideId).toBe('blum-tandem-457')
+  })
+
+  it('keeps the slide when nothing of the new mount exists', () => {
+    const { get, cab } = setup(undermountOnly())
+    get().setSlideMount('cab_1', 'side-mount')
+    expect(cab().construction.drawer.slideMount).toBe('side-mount')
+    expect(cab().hardware.slideId).toBe('blum-tandem-533')
   })
 })
 

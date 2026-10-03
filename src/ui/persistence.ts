@@ -7,6 +7,8 @@ import type { Project } from '@/core/types'
 import { validateProject } from './lib/projectSchema'
 
 export const STORAGE_KEY = 'cabinetmaker:project'
+/** Where a saved project that no longer validates is kept, so autosave cannot overwrite the only copy. */
+export const REJECTED_STORAGE_KEY = 'cabinetmaker:project:rejected'
 export const AUTOSAVE_DELAY_MS = 500
 
 /** The subset of `Storage` persistence needs; lets tests pass a fake. */
@@ -29,14 +31,19 @@ export function serializeProject(project: Project): string {
   return JSON.stringify(project, null, 2)
 }
 
-/** Saved project if present and valid, otherwise a fresh default project. */
+/**
+ * Saved project if present and valid, otherwise a fresh default project. An
+ * invalid saved project is copied to `REJECTED_STORAGE_KEY` first.
+ */
 export function loadProject(storage: ProjectStorage | null): Project {
   if (!storage) return createProject()
   try {
     const text = storage.getItem(STORAGE_KEY)
     if (text === null) return createProject()
     const parsed = parseProjectJson(text)
-    return parsed.ok ? parsed.project : createProject()
+    if (parsed.ok) return parsed.project
+    storage.setItem(REJECTED_STORAGE_KEY, text)
+    return createProject()
   } catch {
     // Storage can throw (disabled cookies, privacy mode); start fresh.
     return createProject()

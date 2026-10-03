@@ -2,7 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fixtureProject } from '@/core/fixtures'
 import type { Project } from '@/core/types'
 import { isProject, validateProject } from './lib/projectSchema'
-import { attachAutosave, loadProject, parseProjectJson, type ProjectStorage, saveProject, serializeProject, STORAGE_KEY } from './persistence'
+import {
+  attachAutosave,
+  loadProject,
+  parseProjectJson,
+  type ProjectStorage,
+  REJECTED_STORAGE_KEY,
+  saveProject,
+  serializeProject,
+  STORAGE_KEY,
+} from './persistence'
 import { createDesignerStore } from './store'
 
 class MemoryStorage implements ProjectStorage {
@@ -126,6 +135,14 @@ describe('loadProject / saveProject', () => {
     expect(loadProject(storage).id).not.toBe('prj_fixture')
     expect(loadProject(throwingStorage).cabinets).toHaveLength(1)
     expect(loadProject(null).cabinets).toHaveLength(1)
+  })
+
+  it('keeps a copy of a saved project it cannot load so autosave does not destroy it', () => {
+    const storage = new MemoryStorage()
+    const stale = JSON.stringify({ ...fixtureProject(), tools: [{ ...fixtureProject().tools[0], stepDown: 0.001 }] })
+    storage.data.set(STORAGE_KEY, stale)
+    expect(loadProject(storage).id).not.toBe('prj_fixture')
+    expect(storage.getItem(REJECTED_STORAGE_KEY)).toBe(stale)
   })
 
   it('reports failed writes instead of throwing', () => {

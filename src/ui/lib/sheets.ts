@@ -8,7 +8,7 @@ export function overallYield(sheets: readonly Sheet[]): number {
   return sheets.reduce((sum, s) => sum + s.yield * s.length * s.width, 0) / area
 }
 
-/** `position` is 1-based across all sheets (matches the `.nc` file number). */
-export function sheetLabel(project: Project, sheet: Sheet, position: number): string {
-  return `Sheet ${position} — ${materialName(project, sheet.materialId)} #${sheet.index}`
+/** `Sheet 1 (ply-18#1) — 18 mm plywood`: numbered per material, like the drawings, PDF and `.nc` file. */
+export function sheetLabel(project: Project, sheet: Sheet): string {
+  return `Sheet ${sheet.index} (${sheet.id}) — ${materialName(project, sheet.materialId)}`
 }
