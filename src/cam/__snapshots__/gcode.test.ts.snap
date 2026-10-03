@@ -1,0 +1,73 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`snapshot > emits a stable program for a small part 1`] = `
+"%
+(PREVIEW - simulate before running; not validated for any specific machine)
+(Program: small)
+(Sheet: ply-18#1)
+(Material: 18 mm plywood)
+(Tools:)
+(T3 D5 5 mm brad-point drill)
+(T1 D6.35 1/4" compression end mill)
+G21
+G90
+G17
+(Tool T3 D5 5 mm brad-point drill)
+G0 Z25
+G0 X0 Y0
+G0 Z50
+M5
+T3 M6
+M0 (Manual tool change: install T3 5 mm brad-point drill, then resume)
+S6000 M3
+(drill ply-18#1:cab_1:shelf-1:pin)
+G0 Z10
+G0 X40 Y40
+G0 Z3
+G1 Z0 F600
+G1 Z-3
+G0 Z10
+G0 Z3
+G1 Z-3
+G1 Z-6
+G0 Z10
+(Tool T1 D6.35 1/4" compression end mill)
+G0 Z25
+G0 X0 Y0
+G0 Z50
+M5
+T1 M6
+M0 (Manual tool change: install T1 1/4" compression end mill, then resume)
+S18000 M3
+(profile ply-18#1:cab_1:shelf-1:profile)
+G0 Z10
+G0 X16.825 Y16.825
+G0 Z3
+G1 Z-5.9 F1000
+G1 Y63.175 F4000
+G1 X83.175
+G1 Y16.825
+G1 X16.825
+G0 Z10
+G0 Z3
+G1 Z-11.8 F1000
+G1 Y63.175 F4000
+G1 X83.175
+G1 Y16.825
+G1 X16.825
+G0 Z10
+G0 Z3
+G1 Z-17.7 F1000
+G1 Y63.175 F4000
+G1 X83.175
+G1 Y16.825
+G1 X16.825
+G0 Z10
+M5
+G0 Z25
+G0 X0 Y1200
+G0 Z50
+M30
+%
+"
+`;
