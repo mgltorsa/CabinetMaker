@@ -4,6 +4,7 @@ import { useId, useState } from 'react'
 import type { CabinetType } from '@/core/types'
 import { PRESETS } from '@/engine/presets'
 import { lengthLabel } from '../lib/format'
+import { MAX_CABINETS } from '../lib/limits'
 import { useDesigner } from '../store'
 
 export function CabinetList() {
@@ -17,6 +18,7 @@ export function CabinetList() {
   const [presetType, setPresetType] = useState<CabinetType>(PRESETS[0]?.type ?? 'base')
   const presetId = useId()
   const presetDescription = PRESETS.find((p) => p.type === presetType)?.description
+  const isFull = cabinets.length >= MAX_CABINETS
 
   const handleDelete = (id: string, name: string): void => {
     if (window.confirm(`Delete "${name}"? This cannot be undone.`)) deleteCabinet(id)
@@ -40,7 +42,7 @@ export function CabinetList() {
                   </span>
                 </button>
                 <div className="row-actions">
-                  <button type="button" className="ghost small" onClick={() => duplicateCabinet(cab.id)} aria-label={`Duplicate ${cab.name}`}>
+                  <button type="button" className="ghost small" disabled={isFull} onClick={() => duplicateCabinet(cab.id)} aria-label={`Duplicate ${cab.name}`}>
                     Duplicate
                   </button>
                   <button type="button" className="ghost small danger" onClick={() => handleDelete(cab.id, cab.name)} aria-label={`Delete ${cab.name}`}>
@@ -69,11 +71,11 @@ export function CabinetList() {
               </option>
             ))}
           </select>
-          <button type="button" onClick={() => addCabinetFromPreset(presetType)}>
+          <button type="button" disabled={isFull} onClick={() => addCabinetFromPreset(presetType)}>
             Add
           </button>
         </div>
-        {presetDescription && <p className="hint">{presetDescription}</p>}
+        {isFull ? <p className="hint">A project holds at most {MAX_CABINETS} cabinets.</p> : presetDescription && <p className="hint">{presetDescription}</p>}
       </div>
     </section>
   )

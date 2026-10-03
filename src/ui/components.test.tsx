@@ -1,8 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { fixtureProject } from '@/core/fixtures'
-import type { Drawing, Sheet, Toolpath } from '@/core/types'
+import type { Drawing, HardwareItem, Project, Sheet, Toolpath } from '@/core/types'
+import { CamWarnings, ExportProblems } from './cam/CamNotices'
+import { MachineSettings } from './cam/MachineSettings'
 import { ToolpathPreview } from './cam/ToolpathPreview'
+import { ConstructionGroups, HardwareGroup } from './components/CabinetForm'
 import { DrawingView } from './components/DrawingView'
 import { WarningsPanel } from './components/WarningsPanel'
 
@@ -96,5 +99,113 @@ describe('WarningsPanel', () => {
   it('shows a pipeline failure', () => {
     const html = renderToStaticMarkup(<WarningsPanel project={fixtureProject()} pipelineError="Unknown material" warnings={[]} />)
     expect(html).toContain('could not be built: Unknown material')
+  })
+})
+
+/** The markup of one labelled select, from its label to its closing tag. */
+function selectMarkup(html: string, label: string): string {
+  const start = html.indexOf(`>${label}</label>`)
+  expect(start).toBeGreaterThan(-1)
+  return html.slice(start, html.indexOf('</select>', start))
+}
+
+describe('MachineSettings', () => {
+  const render = (edit: (p: ReturnType<typeof fixtureProject>) => void = () => undefined): string => {
+    const project = fixtureProject()
+    edit(project)
+    return renderToStaticMarkup(<MachineSettings machine={project.machine} tools={project.tools} units="metric" />)
+  }
+
+  it('offers only cutting tools for profile and dado, any tool for drilling', () => {
+    const html = render()
+    expect(selectMarkup(html, 'Profile tool')).not.toContain('T3 ')
+    expect(selectMarkup(html, 'Dado tool')).not.toContain('T3 ')
+    expect(selectMarkup(html, 'Drill tool')).toContain('T3 5 mm brad-point drill')
+  })
+
+  it('flags a drill already chosen as the profile tool', () => {
+    const html = render((p) => (p.machine.profileToolId = 't3'))
+    expect(selectMarkup(html, 'Profile tool')).toContain('aria-invalid="true"')
+    expect(html).toMatch(/Profile tool T3 5 mm brad-point drill is a drill/)
+  })
+
+  it('marks duplicate tool numbers inline', () => {
+    const html = render((p) => (p.tools[2]!.number = 1))
+    expect(html.match(/T1 is used by another tool/g)).toHaveLength(2)
+    expect(html.match(/aria-invalid="true"/g)).toHaveLength(2)
+  })
+
+  it('no longer shows the unused edge inset', () => {
+    expect(render()).not.toContain('Edge inset')
+  })
+})
+
+describe('CAM notices', () => {
+  it('lists blocked sheets with their messages', () => {
+    const html = renderToStaticMarkup(
+      <ExportProblems problems={[{ label: 'Sheet 1 (ply-18#1) — 18 mm plywood', messages: ['Sheet is larger than the table'] }]} onDismiss={() => undefined} />,
+    )
+    expect(html).toContain('role="alert"')
+    expect(html).toContain('Sheet 1 (ply-18#1)')
+    expect(html).toContain('Sheet is larger than the table')
+  })
+
+  it('sorts CAM warnings errors first and says they block downloads', () => {
+    const html = renderToStaticMarkup(
+      <CamWarnings
+        warnings={[
+          { level: 'info', code: 'a', message: 'Inch output soon' },
+          { level: 'error', code: 'b', message: 'Tool missing' },
+        ]}
+      />,
+    )
+    expect(html.indexOf('Tool missing')).toBeLessThan(html.indexOf('Inch output soon'))
+    expect(html).toContain('block G-code download')
+    expect(renderToStaticMarkup(<CamWarnings warnings={[]} />)).toBe('')
+  })
+})
+
+describe('CabinetForm drawer slides', () => {
+  const sideSlide: HardwareItem = {
+    id: 'side-457',
+    kind: 'slide',
+    name: 'Side-mount slide 457 mm (pair)',
+    manufacturer: 'Generic',
+    sku: 'SIDE-457',
+    unitCost: 15,
+    props: { length: 457, mount: 1 },
+  }
+
+  /** Fixture with only undermount slides, plus `extra` hardware. */
+  const renderWith = (extra: HardwareItem[], edit: (p: Project) => void = () => undefined): string => {
+    const project = fixtureProject()
+    project.hardware = [...project.hardware.filter((h) => h.kind !== 'slide' || h.props.mount === 0), ...extra]
+    edit(project)
+    const cabinet = project.cabinets[0]!
+    return renderToStaticMarkup(
+      <>
+        <ConstructionGroups cabinet={cabinet} project={project} units="metric" />
+        <HardwareGroup cabinet={cabinet} project={project} />
+      </>,
+    )
+  }
+
+  it('disables side mount when the catalog has no side-mount slide', () => {
+    const mount = selectMarkup(renderWith([]), 'Slide mount')
+    expect(mount).toMatch(/<option value="side-mount" disabled="">/)
+  })
+
+  it('enables side mount and lists only slides of the chosen mount', () => {
+    const under = renderWith([sideSlide])
+    expect(selectMarkup(under, 'Slide mount')).not.toMatch(/value="side-mount" disabled/)
+    expect(selectMarkup(under, 'Slide')).toContain('blum-tandem-533')
+    expect(selectMarkup(under, 'Slide')).not.toContain('side-457')
+
+    const side = renderWith([sideSlide], (p) => {
+      p.cabinets[0]!.construction.drawer.slideMount = 'side-mount'
+      p.cabinets[0]!.hardware.slideId = 'side-457'
+    })
+    expect(selectMarkup(side, 'Slide')).toContain('side-457')
+    expect(selectMarkup(side, 'Slide')).not.toContain('blum-tandem-533')
   })
 })

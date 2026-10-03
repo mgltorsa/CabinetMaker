@@ -16,7 +16,48 @@ import {
   type SheetMaterial,
   type Tool,
 } from '@/core/types'
-import { arrayOf, bool, type Check, isRecord, nullable, num, obj, oneOf, optional, recordOf, str } from './schema'
+import {
+  CABINET_DIMENSION,
+  FLOOR_HEIGHT,
+  MAX_BAYS,
+  MAX_CABINETS,
+  MAX_CATALOG_ITEMS,
+  MAX_LENGTH,
+  MAX_SECTIONS,
+  MAX_SHELF_PIN_DIAMETER,
+  MAX_SHELVES,
+  MAX_TAB_WIDTH,
+  MIN_SHELF_PIN_SPACING,
+  MIN_STEP_DOWN,
+  MIN_TAB_SPACING,
+  SECTION_SIZE,
+  TOOL_NUMBER,
+} from './limits'
+import {
+  arrayOf,
+  bool,
+  type Check,
+  isRecord,
+  nonNegative,
+  nullable,
+  num,
+  numIn,
+  obj,
+  oneOf,
+  optional,
+  positive,
+  recordOf,
+  refine,
+  str,
+  uniqueList,
+} from './schema'
+
+const catalog = { max: MAX_CATALOG_ITEMS }
+
+/** Any length that must not be negative (gaps, depths, insets, reveals…). */
+const length = nonNegative(MAX_LENGTH)
+/** A length that must be positive (thicknesses, widths of real stock…). */
+const size = positive(MAX_LENGTH)
 
 const construction = obj<ConstructionMethod>({
   style: oneOf('frameless-overlay', 'frameless-inset', 'face-frame-overlay', 'face-frame-inset'),
@@ -27,75 +68,100 @@ const construction = obj<ConstructionMethod>({
   drawerBottomMaterialId: str,
   faceFrameMaterialId: str,
   joinery: oneOf('none', 'dowel', 'domino', 'dado'),
-  back: obj({ construction: oneOf('captured', 'applied'), grooveDepth: num, inset: num }),
-  reveal: obj({ edge: num, between: num }),
+  back: obj({ construction: oneOf('captured', 'applied'), grooveDepth: length, inset: length }),
+  reveal: obj({ edge: length, between: length }),
   system32: bool,
-  toeKick: obj({ type: oneOf('none', 'panel', 'full'), height: num, setback: num }),
+  toeKick: obj({ type: oneOf('none', 'panel', 'full'), height: length, setback: length }),
   top: oneOf('full-top', 'stretchers'),
-  stretcherWidth: num,
+  stretcherWidth: length,
   rearNailer: bool,
-  nailerWidth: num,
-  faceFrame: obj({ stileWidth: num, railWidth: num, overhang: num }),
-  shelfPins: obj({ inset: num, spacing: num, diameter: num, depth: num }),
-  hinge: obj({ cupDiameter: num, cupDepth: num, cupEdgeDistance: num, endDistance: num }),
+  nailerWidth: length,
+  faceFrame: obj({ stileWidth: size, railWidth: size, overhang: length }),
+  // Spacing ≥ MIN_SHELF_PIN_SPACING ≥ MAX_SHELF_PIN_DIAMETER, so pins never overlap.
+  shelfPins: obj({
+    inset: length,
+    spacing: numIn({ min: MIN_SHELF_PIN_SPACING, max: MAX_LENGTH }),
+    diameter: numIn({ above: 0, max: MAX_SHELF_PIN_DIAMETER }),
+    depth: length,
+  }),
+  hinge: obj({ cupDiameter: size, cupDepth: length, cupEdgeDistance: length, endDistance: length }),
   drawer: obj({
     slideMount: oneOf('undermount', 'side-mount'),
     joinery: oneOf('none', 'dowel', 'domino', 'dado'),
-    rearClearance: num,
+    rearClearance: length,
   }),
 })
+
+const sectionSize = nullable(numIn(SECTION_SIZE))
 
 const bay = obj<Bay>({
   id: str,
   kind: oneOf('drawer', 'door', 'open'),
-  height: nullable(num),
-  shelfCount: num,
+  height: sectionSize,
+  shelfCount: numIn({ min: 0, max: MAX_SHELVES, integer: true }),
   doorCount: oneOf(1, 2),
   hingeSide: oneOf('left', 'right'),
 })
 
-const section = obj<Section>({ id: str, width: nullable(num), bays: arrayOf(bay) })
+const section = obj<Section>({ id: str, width: sectionSize, bays: arrayOf(bay, { min: 1, max: MAX_BAYS }) })
 
-const cabinet = obj<Cabinet>({
-  id: str,
-  name: str,
-  type: oneOf('base', 'wall', 'tall', 'drawer-bank', 'bookshelf', 'nightstand', 'dresser', 'vanity', 'custom'),
-  width: num,
-  height: num,
-  depth: num,
-  floorHeight: num,
-  construction,
-  sections: arrayOf(section),
-  hardware: obj({ hingeId: str, slideId: str, pullId: nullable(str), shelfPinId: str }),
-  top: obj({
-    kind: oneOf('none', 'finished', 'countertop'),
-    materialId: nullable(str),
-    thickness: num,
-    overhangFront: num,
-    overhangSides: num,
+/** Bay ids must be unique across all sections of a cabinet. */
+function uniqueBayIds(sections: readonly Section[], path: string): string | null {
+  const seen = new Set<string>()
+  for (const [si, s] of sections.entries()) {
+    for (const [bi, b] of s.bays.entries()) {
+      if (seen.has(b.id)) return `${path}.sections[${si}].bays[${bi}].id duplicates "${b.id}"; ids must be unique`
+      seen.add(b.id)
+    }
+  }
+  return null
+}
+
+const cabinetDimension = numIn(CABINET_DIMENSION)
+
+const cabinet = refine(
+  obj<Cabinet>({
+    id: str,
+    name: str,
+    type: oneOf('base', 'wall', 'tall', 'drawer-bank', 'bookshelf', 'nightstand', 'dresser', 'vanity', 'custom'),
+    width: cabinetDimension,
+    height: cabinetDimension,
+    depth: cabinetDimension,
+    floorHeight: numIn(FLOOR_HEIGHT),
+    construction,
+    sections: uniqueList(section, { min: 1, max: MAX_SECTIONS }),
+    hardware: obj({ hingeId: str, slideId: str, pullId: nullable(str), shelfPinId: str }),
+    top: obj({
+      kind: oneOf('none', 'finished', 'countertop'),
+      materialId: nullable(str),
+      thickness: length,
+      overhangFront: length,
+      overhangSides: length,
+    }),
+    placement: optional(obj({ wallId: nullable(str), offset: num, rotationDeg: num })),
   }),
-  placement: optional(obj({ wallId: nullable(str), offset: num, rotationDeg: num })),
-})
+  (c, p) => uniqueBayIds(c.sections, p),
+)
 
 const sheetMaterial = obj<SheetMaterial>({
   kind: oneOf('sheet'),
   id: str,
   name: str,
-  thickness: num,
-  sheetLength: num,
-  sheetWidth: num,
+  thickness: size,
+  sheetLength: size,
+  sheetWidth: size,
   grained: bool,
-  costPerSheet: num,
+  costPerSheet: nonNegative(),
 })
 
 const linearMaterial = obj<LinearMaterial>({
   kind: oneOf('linear'),
   id: str,
   name: str,
-  thickness: num,
-  width: num,
-  stockLength: num,
-  costPerMetre: num,
+  thickness: size,
+  width: size,
+  stockLength: size,
+  costPerMetre: nonNegative(),
 })
 
 const material: Check<Material> = (v, p) => {
@@ -110,76 +176,89 @@ const hardwareItem = obj<HardwareItem>({
   name: str,
   manufacturer: str,
   sku: str,
-  unitCost: num,
+  unitCost: nonNegative(),
   props: recordOf(num),
 })
 
-const tool = obj<Tool>({
-  id: str,
-  number: num,
-  name: str,
-  kind: oneOf('end-mill', 'drill', 'compression'),
-  diameter: num,
-  fluteLength: num,
-  rpm: num,
-  plungeFeed: num,
-  cutFeed: num,
-  stepDown: num,
-})
+const tool = refine(
+  obj<Tool>({
+    id: str,
+    number: numIn({ ...TOOL_NUMBER, integer: true }),
+    name: str,
+    kind: oneOf('end-mill', 'drill', 'compression'),
+    diameter: size,
+    fluteLength: size,
+    rpm: positive(),
+    plungeFeed: positive(),
+    cutFeed: positive(),
+    stepDown: numIn({ min: MIN_STEP_DOWN, max: MAX_LENGTH }),
+  }),
+  (t, p) => (t.stepDown <= t.fluteLength ? null : `${p}.stepDown (${t.stepDown}) must not exceed the flute length (${t.fluteLength})`),
+)
 
 const point = obj<MachinePoint>({ x: num, y: num, z: num })
 
 const machine = obj<Machine>({
   name: str,
-  tableX: num,
-  tableY: num,
+  tableX: size,
+  tableY: size,
   edgeInset: num,
   safeZ: num,
   programSafeZ: num,
-  rapidClearance: num,
+  rapidClearance: length,
   home: point,
   toolChange: obj<Machine['toolChange']>({ x: num, y: num, z: num, mode: oneOf('manual', 'auto') }),
   park: point,
   units: oneOf('G21', 'G20'),
-  tabs: obj({ enabled: bool, spacing: num, width: num, thickness: num }),
-  onionSkin: num,
-  throughCutExtra: num,
+  // Spacing ≥ MIN_TAB_SPACING > MAX_TAB_WIDTH, so tabs never merge.
+  tabs: obj({
+    enabled: bool,
+    spacing: numIn({ min: MIN_TAB_SPACING, max: MAX_LENGTH }),
+    width: numIn({ above: 0, max: MAX_TAB_WIDTH }),
+    thickness: length,
+  }),
+  onionSkin: length,
+  throughCutExtra: length,
   profileToolId: str,
   dadoToolId: str,
   drillToolId: str,
 })
 
-const nest = obj<NestSettings>({ kerf: num, edgeTrim: num, partSpacing: num, ignoreGrain: bool })
+const nest = obj<NestSettings>({ kerf: length, edgeTrim: length, partSpacing: length, ignoreGrain: bool })
+
+const minutes = nonNegative()
 
 const estimate = obj<EstimateSettings>({
   currency: str,
-  shopRate: num,
-  margin: num,
-  linearWaste: num,
+  shopRate: nonNegative(),
+  // price = cost / (1 - margin)
+  margin: numIn({ min: 0, below: 1 }),
+  linearWaste: nonNegative(),
   labor: obj({
-    minutesPerSheet: num,
-    minutesPerPart: num,
-    minutesPerJoineryOp: num,
-    minutesPerHole: num,
-    minutesPerHardwareItem: num,
-    assemblyMinutesPerCabinet: num,
+    minutesPerSheet: minutes,
+    minutesPerPart: minutes,
+    minutesPerJoineryOp: minutes,
+    minutesPerHole: minutes,
+    minutesPerHardwareItem: minutes,
+    assemblyMinutesPerCabinet: minutes,
   }),
 })
 
 const vec2 = obj({ x: num, y: num })
 
 const room = obj<Room>({
-  walls: arrayOf(obj({ id: str, start: vec2, end: vec2, thickness: num, height: num })),
-  openings: arrayOf(
+  walls: uniqueList(obj({ id: str, start: vec2, end: vec2, thickness: length, height: length }), catalog),
+  openings: uniqueList(
     obj({
       id: str,
       wallId: str,
       kind: oneOf('door', 'window'),
       offset: num,
-      width: num,
-      height: num,
+      width: length,
+      height: length,
       sillHeight: num,
     }),
+    catalog,
   ),
 })
 
@@ -188,10 +267,10 @@ const projectShape = obj<Project>({
   id: str,
   name: str,
   units: oneOf('metric', 'imperial'),
-  cabinets: arrayOf(cabinet),
-  materials: arrayOf(material),
-  hardware: arrayOf(hardwareItem),
-  tools: arrayOf(tool),
+  cabinets: uniqueList(cabinet, { max: MAX_CABINETS }),
+  materials: uniqueList(material, catalog),
+  hardware: uniqueList(hardwareItem, catalog),
+  tools: uniqueList(tool, { max: TOOL_NUMBER.max }),
   machine,
   nest,
   estimate,
@@ -210,7 +289,12 @@ function checkReferences(project: Project): string | null {
   return null
 }
 
-/** `null` when `value` is a usable current-schema project, else the first problem. */
+/**
+ * `null` when `value` is a usable current-schema project, else the first
+ * problem with its path. Beyond the shape this enforces the sanity bounds of
+ * `./limits` (so an import cannot hang the pipeline), unique ids, and that
+ * cabinets reference known materials.
+ */
 export function validateProject(value: unknown): string | null {
   if (!isRecord(value)) return 'File is not a JSON object'
   if (value.schemaVersion !== PROJECT_SCHEMA_VERSION) {

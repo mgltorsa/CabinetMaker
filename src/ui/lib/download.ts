@@ -1,3 +1,5 @@
+import type { Sheet } from '@/core/types'
+
 /** Keep the object URL alive long enough for the browser to start the download. */
 const REVOKE_DELAY_MS = 1000
 
@@ -25,7 +27,11 @@ export function slugify(name: string, fallback = 'cabinet-project'): string {
   return slug === '' ? fallback : slug
 }
 
-/** `${slug}-sheet-${n}.nc`, n is 1-based across all sheets. */
-export function sheetFilename(projectSlug: string, sheetNumber: number): string {
-  return `${projectSlug}-sheet-${sheetNumber}.nc`
+/**
+ * `${slug}-${materialId}-${index}.nc`: the same per-material sheet number as the
+ * drawings and PDF (`Sheet n (materialId#n)`). The material id is slugged so an
+ * imported id cannot smuggle path separators into the file name.
+ */
+export function sheetFilename(projectSlug: string, sheet: Pick<Sheet, 'materialId' | 'index'>): string {
+  return `${projectSlug}-${slugify(sheet.materialId, 'material')}-${sheet.index}.nc`
 }

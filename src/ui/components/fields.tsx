@@ -12,6 +12,7 @@ import {
   parseOptionalLengthField,
 } from '../lib/fieldParse'
 import { unitSuffix } from '../lib/format'
+import { MAX_LENGTH } from '../lib/limits'
 
 type CommitFieldProps<T> = {
   label: string
@@ -28,6 +29,8 @@ type CommitFieldProps<T> = {
   isLabelHidden?: boolean
   /** Free text (names) rather than a measurement: proportional font, no suffix padding. */
   isFreeText?: boolean
+  /** Problem with the committed value (e.g. a duplicate); a draft's own parse error wins. */
+  error?: string
 }
 
 /**
@@ -47,12 +50,13 @@ export function CommitField<T>({
   className,
   isLabelHidden = false,
   isFreeText = false,
+  error: valueError,
 }: CommitFieldProps<T>) {
   const id = useId()
   const errorId = `${id}-error`
   const [draft, setDraft] = useState<string | null>(null)
   const parsed = draft === null ? null : parse(draft)
-  const error = parsed && !parsed.ok ? parsed.error : null
+  const error = parsed && !parsed.ok ? parsed.error : (valueError ?? null)
 
   const commit = (): void => {
     if (draft === null) return
@@ -113,8 +117,8 @@ type LengthInputProps = RangeOptions & {
   isLabelHidden?: boolean
 }
 
-/** Unit-aware length: shows project units, commits millimetres. */
-export function LengthInput({ label, value, units, onCommit, min = 0, max, isDisabled, isLabelHidden }: LengthInputProps) {
+/** Unit-aware length: shows project units, commits millimetres. Bounded by `MAX_LENGTH` unless `max` is given. */
+export function LengthInput({ label, value, units, onCommit, min = 0, max = MAX_LENGTH, isDisabled, isLabelHidden }: LengthInputProps) {
   return (
     <CommitField<Mm>
       label={label}
@@ -138,7 +142,7 @@ type OptionalLengthInputProps = RangeOptions & {
 }
 
 /** Length where an empty field means "auto" (share remaining space). */
-export function OptionalLengthInput({ label, value, units, onCommit, min = 0, max }: OptionalLengthInputProps) {
+export function OptionalLengthInput({ label, value, units, onCommit, min = 0, max = MAX_LENGTH }: OptionalLengthInputProps) {
   return (
     <CommitField<Mm | null>
       label={label}
@@ -160,9 +164,10 @@ type NumberInputProps = NumberOptions & {
   suffix?: string
   isDisabled?: boolean
   isLabelHidden?: boolean
+  error?: string
 }
 
-export function NumberInput({ label, value, onCommit, suffix, isDisabled, isLabelHidden, ...options }: NumberInputProps) {
+export function NumberInput({ label, value, onCommit, suffix, isDisabled, isLabelHidden, error, ...options }: NumberInputProps) {
   return (
     <CommitField<number>
       label={label}
@@ -174,6 +179,7 @@ export function NumberInput({ label, value, onCommit, suffix, isDisabled, isLabe
       isDisabled={isDisabled}
       isLabelHidden={isLabelHidden}
       inputMode={options.integer ? 'numeric' : 'decimal'}
+      error={error}
     />
   )
 }
@@ -215,10 +221,13 @@ type SelectFieldProps<T extends string> = {
   options: readonly SelectOption<T>[]
   onChange: (value: T) => void
   isLabelHidden?: boolean
+  /** Problem with the current choice, shown under the select. */
+  error?: string
 }
 
-export function SelectField<T extends string>({ label, value, options, onChange, isLabelHidden = false }: SelectFieldProps<T>) {
+export function SelectField<T extends string>({ label, value, options, onChange, isLabelHidden = false, error }: SelectFieldProps<T>) {
   const id = useId()
+  const errorId = `${id}-error`
   const handleChange = (raw: string): void => {
     const match = options.find((o) => o.value === raw)
     if (match) onChange(match.value)
@@ -228,13 +237,24 @@ export function SelectField<T extends string>({ label, value, options, onChange,
       <label htmlFor={id} className={isLabelHidden ? 'visually-hidden' : undefined}>
         {label}
       </label>
-      <select id={id} value={value} onChange={(e) => handleChange(e.target.value)}>
+      <select
+        id={id}
+        value={value}
+        aria-invalid={error !== undefined}
+        aria-describedby={error ? errorId : undefined}
+        onChange={(e) => handleChange(e.target.value)}
+      >
         {options.map((o) => (
           <option key={o.value} value={o.value} disabled={o.isDisabled}>
             {o.label}
           </option>
         ))}
       </select>
+      {error && (
+        <p id={errorId} className="field-error" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   )
 }

@@ -53,7 +53,7 @@ describe('formatting and downloads', () => {
     expect(slugify('Kitchen Run #2')).toBe('kitchen-run-2')
     expect(slugify('Café  Cabinets!')).toBe('cafe-cabinets')
     expect(slugify('***')).toBe('cabinet-project')
-    expect(sheetFilename('untitled-cabinet', 1)).toBe('untitled-cabinet-sheet-1.nc')
+    expect(sheetFilename('untitled-cabinet', { materialId: 'ply-18', index: 2 })).toBe('untitled-cabinet-ply-18-2.nc')
   })
 })
 

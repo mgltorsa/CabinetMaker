@@ -117,7 +117,7 @@ export function CutPlanView({ project, result }: CutPlanViewProps) {
         nest.sheets.map((sheet, i) => (
           <section key={sheet.id} className="sheet-card" aria-labelledby={`sheet-${i}-heading`}>
             <h3 id={`sheet-${i}-heading`} className="view-title">
-              {sheetLabel(project, sheet, i + 1)}
+              {sheetLabel(project, sheet)}
             </h3>
             <p className="hint">
               {lengthLabel(sheet.length, units)} × {lengthLabel(sheet.width, units)} · {sheet.placements.length} parts · yield {percent(sheet.yield)}
@@ -131,7 +131,7 @@ export function CutPlanView({ project, result }: CutPlanViewProps) {
                   grained: material?.kind === 'sheet' ? material.grained : undefined,
                 })
               }}
-              units={units} label={`Layout of ${sheetLabel(project, sheet, i + 1)}`} />
+              units={units} label={`Layout of ${sheetLabel(project, sheet)}`} />
           </section>
         ))
       )}

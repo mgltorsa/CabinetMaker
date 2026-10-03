@@ -7,6 +7,7 @@ import type {
   ConstructionMethod,
   ConstructionStyle,
   DrawerJoinery,
+  HardwareItem,
   HardwareKind,
   JoineryType,
   Project,
@@ -16,6 +17,8 @@ import type {
   ToeKickType,
   UnitSystem,
 } from '@/core/types'
+import { CABINET_DIMENSION, FLOOR_HEIGHT, MAX_SHELF_PIN_DIAMETER, MIN_SHELF_PIN_SPACING } from '../lib/limits'
+import { hasSideMountSlides, slidesForMount } from '../lib/slides'
 import { selectedCabinet, useDesigner } from '../store'
 import { CheckboxField, FieldGroup, LengthInput, SelectField, type SelectOption, TextInput } from './fields'
 import { SectionsEditor } from './SectionsEditor'
@@ -64,10 +67,18 @@ const TOP_CONSTRUCTIONS = opts<TopConstruction>([
   ['stretchers', 'Stretchers'],
   ['full-top', 'Full top panel'],
 ])
-const SLIDE_MOUNTS = opts<SlideMount>([
-  ['undermount', 'Undermount'],
-  ['side-mount', 'Side mount'],
-])
+/** Side mount is offered only when the catalog has a side-mount slide (or the cabinet already uses it). */
+function slideMountOptions(project: Project, current: SlideMount): SelectOption<SlideMount>[] {
+  const hasSide = hasSideMountSlides(project.hardware)
+  return [
+    { value: 'undermount', label: 'Undermount' },
+    {
+      value: 'side-mount',
+      label: hasSide ? 'Side mount' : 'Side mount (no side-mount slides in catalog)',
+      isDisabled: !hasSide && current !== 'side-mount',
+    },
+  ]
+}
 const TOP_KINDS = opts<TopKind>([
   ['none', 'None'],
   ['finished', 'Finished top'],
@@ -80,8 +91,18 @@ function materialOptions(project: Project, kind: 'sheet' | 'linear'): SelectOpti
   return project.materials.filter((m) => m.kind === kind).map((m) => ({ value: m.id, label: m.name }))
 }
 
+const hardwareOption = (h: HardwareItem): SelectOption<string> => ({ value: h.id, label: `${h.name} (${h.manufacturer} ${h.sku})` })
+
 function hardwareOptions(project: Project, kind: HardwareKind): SelectOption<string>[] {
-  return project.hardware.filter((h) => h.kind === kind).map((h) => ({ value: h.id, label: `${h.name} (${h.manufacturer} ${h.sku})` }))
+  return project.hardware.filter((h) => h.kind === kind).map(hardwareOption)
+}
+
+/** Slides of the cabinet's mount; a current slide of the other mount stays listed, marked as such. */
+function slideOptions(project: Project, mount: SlideMount, currentId: string): SelectOption<string>[] {
+  const options = slidesForMount(project.hardware, mount).map(hardwareOption)
+  const current = project.hardware.find((h) => h.id === currentId && h.kind === 'slide')
+  if (!current || options.some((o) => o.value === currentId)) return withCurrent(options, currentId)
+  return [{ value: current.id, label: `${current.name} (other mount)` }, ...options]
 }
 
 /** Keep the current id selectable even if it is missing from the catalog. */
@@ -96,16 +117,17 @@ function DimensionsGroup({ cabinet, units }: Omit<FormProps, 'project'>) {
     <FieldGroup title="Cabinet" isOpen>
       <TextInput label="Name" value={cabinet.name} onCommit={(name) => set({ name })} className="span-2" />
       <SelectField label="Type" value={cabinet.type} options={CABINET_TYPES} onChange={(type) => set({ type })} />
-      <LengthInput label="Width" value={cabinet.width} units={units} min={1} onCommit={(width) => set({ width })} />
-      <LengthInput label="Height" value={cabinet.height} units={units} min={1} onCommit={(height) => set({ height })} />
-      <LengthInput label="Depth" value={cabinet.depth} units={units} min={1} onCommit={(depth) => set({ depth })} />
-      <LengthInput label="Floor height" value={cabinet.floorHeight} units={units} onCommit={(floorHeight) => set({ floorHeight })} />
+      <LengthInput label="Width" value={cabinet.width} units={units} {...CABINET_DIMENSION} onCommit={(width) => set({ width })} />
+      <LengthInput label="Height" value={cabinet.height} units={units} {...CABINET_DIMENSION} onCommit={(height) => set({ height })} />
+      <LengthInput label="Depth" value={cabinet.depth} units={units} {...CABINET_DIMENSION} onCommit={(depth) => set({ depth })} />
+      <LengthInput label="Floor height" value={cabinet.floorHeight} units={units} {...FLOOR_HEIGHT} onCommit={(floorHeight) => set({ floorHeight })} />
     </FieldGroup>
   )
 }
 
-function ConstructionGroups({ cabinet, project, units }: FormProps) {
+export function ConstructionGroups({ cabinet, project, units }: FormProps) {
   const update = useDesigner((s) => s.updateConstruction)
+  const setSlideMount = useDesigner((s) => s.setSlideMount)
   const c = cabinet.construction
   const set = (patch: Partial<ConstructionMethod>): void => update(cabinet.id, patch)
   const sheets = materialOptions(project, 'sheet')
@@ -163,8 +185,15 @@ function ConstructionGroups({ cabinet, project, units }: FormProps) {
 
       <FieldGroup title="Shelf pins & hinges">
         <LengthInput label="Pin row inset" value={c.shelfPins.inset} units={units} onCommit={(inset) => set({ shelfPins: { ...c.shelfPins, inset } })} />
-        <LengthInput label="Pin spacing" value={c.shelfPins.spacing} units={units} min={1} onCommit={(spacing) => set({ shelfPins: { ...c.shelfPins, spacing } })} />
-        <LengthInput label="Pin diameter" value={c.shelfPins.diameter} units={units} min={0.1} onCommit={(diameter) => set({ shelfPins: { ...c.shelfPins, diameter } })} />
+        <LengthInput label="Pin spacing" value={c.shelfPins.spacing} units={units} min={MIN_SHELF_PIN_SPACING} onCommit={(spacing) => set({ shelfPins: { ...c.shelfPins, spacing } })} />
+        <LengthInput
+          label="Pin diameter"
+          value={c.shelfPins.diameter}
+          units={units}
+          min={0.1}
+          max={MAX_SHELF_PIN_DIAMETER}
+          onCommit={(diameter) => set({ shelfPins: { ...c.shelfPins, diameter } })}
+        />
         <LengthInput label="Pin depth" value={c.shelfPins.depth} units={units} onCommit={(depth) => set({ shelfPins: { ...c.shelfPins, depth } })} />
         <LengthInput label="Hinge cup diameter" value={c.hinge.cupDiameter} units={units} min={1} onCommit={(cupDiameter) => set({ hinge: { ...c.hinge, cupDiameter } })} />
         <LengthInput label="Hinge cup depth" value={c.hinge.cupDepth} units={units} onCommit={(cupDepth) => set({ hinge: { ...c.hinge, cupDepth } })} />
@@ -173,7 +202,12 @@ function ConstructionGroups({ cabinet, project, units }: FormProps) {
       </FieldGroup>
 
       <FieldGroup title="Drawers">
-        <SelectField label="Slide mount" value={c.drawer.slideMount} options={SLIDE_MOUNTS} onChange={(slideMount) => set({ drawer: { ...c.drawer, slideMount } })} />
+        <SelectField
+          label="Slide mount"
+          value={c.drawer.slideMount}
+          options={slideMountOptions(project, c.drawer.slideMount)}
+          onChange={(slideMount) => setSlideMount(cabinet.id, slideMount)}
+        />
         <SelectField label="Drawer box joinery" value={c.drawer.joinery} options={DRAWER_JOINERY} onChange={(joinery) => set({ drawer: { ...c.drawer, joinery } })} />
         <LengthInput label="Rear clearance" value={c.drawer.rearClearance} units={units} onCommit={(rearClearance) => set({ drawer: { ...c.drawer, rearClearance } })} />
       </FieldGroup>
@@ -183,7 +217,7 @@ function ConstructionGroups({ cabinet, project, units }: FormProps) {
 
 const NO_PULL = '__none__'
 
-function HardwareGroup({ cabinet, project }: Omit<FormProps, 'units'>) {
+export function HardwareGroup({ cabinet, project }: Omit<FormProps, 'units'>) {
   const update = useDesigner((s) => s.updateCabinetHardware)
   const h = cabinet.hardware
   const set = (patch: Partial<Cabinet['hardware']>): void => update(cabinet.id, patch)
@@ -191,7 +225,12 @@ function HardwareGroup({ cabinet, project }: Omit<FormProps, 'units'>) {
   return (
     <FieldGroup title="Hardware">
       <SelectField label="Hinge" value={h.hingeId} options={withCurrent(hardwareOptions(project, 'hinge'), h.hingeId)} onChange={(hingeId) => set({ hingeId })} />
-      <SelectField label="Slide" value={h.slideId} options={withCurrent(hardwareOptions(project, 'slide'), h.slideId)} onChange={(slideId) => set({ slideId })} />
+      <SelectField
+        label="Slide"
+        value={h.slideId}
+        options={slideOptions(project, cabinet.construction.drawer.slideMount, h.slideId)}
+        onChange={(slideId) => set({ slideId })}
+      />
       <SelectField label="Pull" value={h.pullId ?? NO_PULL} options={withCurrent(pulls, h.pullId ?? NO_PULL)} onChange={(v) => set({ pullId: v === NO_PULL ? null : v })} />
       <SelectField label="Shelf pin" value={h.shelfPinId} options={withCurrent(hardwareOptions(project, 'shelf-pin'), h.shelfPinId)} onChange={(shelfPinId) => set({ shelfPinId })} />
     </FieldGroup>

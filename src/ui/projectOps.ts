@@ -1,6 +1,8 @@
 /**
  * Pure, immutable Project edits used by the store. Each returns a new Project
  * (or the same reference when nothing changed) and never mutates its input.
+ * Count limits (`lib/limits`) are enforced here so the editor can never build
+ * a project the validator would reject on reload.
  */
 import { newBay, newSection } from '@/core/defaults'
 import { newId } from '@/core/ids'
@@ -15,8 +17,11 @@ import type {
   NestSettings,
   Project,
   Section,
+  SlideMount,
   Tool,
 } from '@/core/types'
+import { MAX_BAYS, MAX_CABINETS, MAX_SECTIONS } from './lib/limits'
+import { slideForMount } from './lib/slides'
 
 export type CabinetPatch = Partial<Pick<Cabinet, 'name' | 'type' | 'width' | 'height' | 'depth' | 'floorHeight'>>
 export type BayPatch = Partial<Omit<Bay, 'id'>>
@@ -82,7 +87,21 @@ export function updateCabinetTop(project: Project, cabinetId: Id, patch: Partial
   return mapCabinet(project, cabinetId, (cab) => ({ ...cab, top: { ...cab.top, ...patch } }))
 }
 
+/** Change the drawer slide mount, moving the cabinet onto a slide of that mount when one exists. */
+export function setSlideMount(project: Project, cabinetId: Id, mount: SlideMount): Project {
+  return mapCabinet(project, cabinetId, (cab) => ({
+    ...cab,
+    construction: { ...cab.construction, drawer: { ...cab.construction.drawer, slideMount: mount } },
+    hardware: { ...cab.hardware, slideId: slideForMount(project.hardware, mount, cab.hardware.slideId) },
+  }))
+}
+
+export function canAddCabinet(project: Project): boolean {
+  return project.cabinets.length < MAX_CABINETS
+}
+
 export function addCabinet(project: Project, cabinet: Cabinet): Project {
+  if (!canAddCabinet(project)) return project
   const taken = new Set(project.cabinets.map((c) => c.id))
   const id = taken.has(cabinet.id) ? uniqueId('cab', taken) : cabinet.id
   const name = uniqueName(cabinet.name, project.cabinets.map((c) => c.name))
@@ -93,7 +112,7 @@ export function addCabinet(project: Project, cabinet: Cabinet): Project {
 export function duplicateCabinet(project: Project, cabinetId: Id): { project: Project; copyId: Id | null } {
   const index = project.cabinets.findIndex((c) => c.id === cabinetId)
   const source = project.cabinets[index]
-  if (!source) return { project, copyId: null }
+  if (!source || !canAddCabinet(project)) return { project, copyId: null }
   const id = uniqueId('cab', new Set(project.cabinets.map((c) => c.id)))
   const copy: Cabinet = {
     ...structuredClone(source),
@@ -117,7 +136,9 @@ export function deleteCabinet(project: Project, cabinetId: Id): Project {
 // ─── Sections & bays ────────────────────────────────────────────────────────
 
 export function addSection(project: Project, cabinetId: Id): Project {
-  return mapCabinet(project, cabinetId, (cab) => ({ ...cab, sections: [...cab.sections, newSection([newBay('door', null, 1)])] }))
+  return mapCabinet(project, cabinetId, (cab) =>
+    cab.sections.length >= MAX_SECTIONS ? cab : { ...cab, sections: [...cab.sections, newSection([newBay('door', null, 1)])] },
+  )
 }
 
 /** A cabinet always keeps at least one section. */
@@ -136,7 +157,7 @@ export function updateSection(project: Project, cabinetId: Id, sectionId: Id, pa
 }
 
 export function addBay(project: Project, cabinetId: Id, sectionId: Id, kind: BayKind): Project {
-  return mapSection(project, cabinetId, sectionId, (s) => ({ ...s, bays: [...s.bays, newBay(kind)] }))
+  return mapSection(project, cabinetId, sectionId, (s) => (s.bays.length >= MAX_BAYS ? s : { ...s, bays: [...s.bays, newBay(kind)] }))
 }
 
 /** A section always keeps at least one bay. */

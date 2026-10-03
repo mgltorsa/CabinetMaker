@@ -1,12 +1,14 @@
 'use client'
 
 import { useId, useMemo, useState } from 'react'
-import type { CamResult, Machine, Part, Project, Sheet, Tool } from '@/core/types'
-import { emitGcode, generateToolpaths } from '@/cam'
+import { generateToolpaths } from '@/cam'
+import type { CamResult, Project, Sheet } from '@/core/types'
 import type { PipelineResult } from '@/pipeline'
+import { CamWarnings, ExportProblems } from '../cam/CamNotices'
 import { MachineSettings } from '../cam/MachineSettings'
 import { ToolpathPreview } from '../cam/ToolpathPreview'
-import { downloadBlob, sheetFilename, slugify } from '../lib/download'
+import { downloadBlob } from '../lib/download'
+import { exportGcode, type ExportProblem } from '../lib/gcodeExport'
 import { sheetLabel } from '../lib/sheets'
 import { errorMessage, notify } from '../toast'
 
@@ -14,15 +16,8 @@ const MULTI_DOWNLOAD_GAP_MS = 300
 
 type CamOutcome = { ok: true; cam: CamResult } | { ok: false; error: string }
 
-function camFor(sheet: Sheet, parts: ReadonlyMap<string, Part>, machine: Machine, tools: Tool[]): CamResult {
-  return generateToolpaths({ sheet, parts, machine, tools })
-}
-
-/** G-code text for one sheet; `position` is the 1-based sheet number. */
-function gcodeFor(project: Project, sheet: Sheet, result: PipelineResult, position: number): string {
-  const cam = camFor(sheet, result.partsById, project.machine, project.tools)
-  return emitGcode(cam.toolpaths, project.machine, project.tools, { programName: `${project.name} sheet ${position}` })
-}
+/** A refused export, tied to the project it was computed for so edits clear it. */
+type BlockedExport = { project: Project; problems: ExportProblem[] }
 
 type CamViewProps = {
   project: Project
@@ -32,35 +27,36 @@ type CamViewProps = {
 export function CamView({ project, result }: CamViewProps) {
   const sheets = result.nest.sheets
   const [chosen, setChosen] = useState(0)
+  const [blocked, setBlocked] = useState<BlockedExport | null>(null)
   const pickerId = useId()
   const index = Math.min(chosen, Math.max(sheets.length - 1, 0))
   const sheet = sheets[index]
-  const slug = slugify(project.name)
   const { partsById } = result
   const { machine, tools } = project
   const partName = (id: string): string => partsById.get(id)?.name ?? id
+  const problems = blocked?.project === project ? blocked.problems : null
 
   // Toolpath generation is the expensive step; recompute only for the chosen sheet.
   const outcome = useMemo((): CamOutcome | null => {
     if (!sheet) return null
     try {
-      return { ok: true, cam: camFor(sheet, partsById, machine, tools) }
+      return { ok: true, cam: generateToolpaths({ sheet, parts: partsById, machine, tools }) }
     } catch (error: unknown) {
       return { ok: false, error: errorMessage(error) }
     }
   }, [sheet, partsById, machine, tools])
 
-  const downloadSheets = (targets: readonly { sheet: Sheet; position: number }[]): void => {
-    let files: { name: string; text: string }[]
-    try {
-      // Generate everything first so a failure never leaves a partial set.
-      files = targets.map((t) => ({ name: sheetFilename(slug, t.position), text: gcodeFor(project, t.sheet, result, t.position) }))
-    } catch (error: unknown) {
-      notify('error', `G-code export failed: ${errorMessage(error)}`)
+  const handleDownload = (targets: readonly Sheet[]): void => {
+    // CAM runs for every target first; any error blocks the whole set.
+    const out = exportGcode(project, targets, partsById)
+    if (!out.ok) {
+      setBlocked({ project, problems: out.problems })
+      notify('error', 'G-code not written: fix the errors listed in the CAM view')
       return
     }
+    setBlocked(null)
     // Browsers drop some of several downloads started in the same tick; space them out.
-    files.forEach((f, i) => setTimeout(() => downloadBlob(f.text, f.name, 'text/plain'), i * MULTI_DOWNLOAD_GAP_MS))
+    out.files.forEach((f, i) => setTimeout(() => downloadBlob(f.text, f.name, 'text/plain'), i * MULTI_DOWNLOAD_GAP_MS))
   }
 
   return (
@@ -80,18 +76,20 @@ export function CamView({ project, result }: CamViewProps) {
               <select id={pickerId} value={index} onChange={(e) => setChosen(Number(e.target.value))}>
                 {sheets.map((s, i) => (
                   <option key={s.id} value={i}>
-                    {sheetLabel(project, s, i + 1)}
+                    {sheetLabel(project, s)}
                   </option>
                 ))}
               </select>
             </div>
-            <button type="button" onClick={() => downloadSheets([{ sheet, position: index + 1 }])}>
-              Download sheet {index + 1} (.nc)
+            <button type="button" onClick={() => handleDownload([sheet])}>
+              Download {sheet.id} (.nc)
             </button>
-            <button type="button" className="secondary" onClick={() => downloadSheets(sheets.map((s, i) => ({ sheet: s, position: i + 1 })))}>
+            <button type="button" className="secondary" onClick={() => handleDownload(sheets)}>
               Download all sheets ({sheets.length} files)
             </button>
           </div>
+
+          {problems && <ExportProblems problems={problems} onDismiss={() => setBlocked(null)} />}
 
           {outcome && !outcome.ok && (
             <div className="view-error" role="alert">
@@ -108,18 +106,9 @@ export function CamView({ project, result }: CamViewProps) {
                 toolpaths={outcome.cam.toolpaths}
                 partsById={result.partsById}
                 tools={project.tools}
-                title={`Toolpaths for ${sheetLabel(project, sheet, index + 1)}`}
+                title={`Toolpaths for ${sheetLabel(project, sheet)}`}
               />
-              {outcome.cam.warnings.length > 0 && (
-                <section className="callout warn" aria-labelledby="cam-warnings-heading">
-                  <h3 id="cam-warnings-heading">CAM warnings</h3>
-                  <ul>
-                    {outcome.cam.warnings.map((w, i) => (
-                      <li key={`${w.code}:${i}`}>{w.message}</li>
-                    ))}
-                  </ul>
-                </section>
-              )}
+              <CamWarnings warnings={outcome.cam.warnings} />
               <section aria-labelledby="manual-ops-heading">
                 <h3 id="manual-ops-heading" className="view-title">
                   Manual operations ({outcome.cam.manualOps.length})
