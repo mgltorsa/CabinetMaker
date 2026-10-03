@@ -6,7 +6,9 @@
  * `endDistance` from the door top and bottom (capped at a quarter of the door
  * height), extra hinges evenly between. Mounting plates (frameless only; face
  * frames take face-frame plates): two screws 32 mm apart on the System 32 line,
- * 37 mm behind the carcass front, on the hinge-side section panel.
+ * 37 mm behind the carcass front, on the hinge-side section panel. Face-frame
+ * cabinets get no plate holes and are billed a plate only when the catalog has
+ * a face-frame plate (`props.faceFrame = 1`).
  */
 import type { BuildWarning, HardwareItem, Mm } from '@/core/types'
 import {
@@ -21,7 +23,7 @@ import {
   WIDE_DOOR_WIDTH,
 } from './constants'
 import { emptyResult, mergeResults, warning, type BuildContext, type HardwareNeed, type RuleResult } from './context'
-import { findHardware, firstOfKind } from './hardware'
+import { findHardware, selectHingePlate } from './hardware'
 import { boxOf, makePart, span, spanSize, type FramedPart } from './geometry'
 import type { BayLayout, FrontRect } from './layout'
 import { holeOp, type PlacedOp } from './ops'
@@ -51,7 +53,9 @@ export function buildDoors(ctx: BuildContext, units: readonly SectionUnit[]): Ru
   const { cabinet, catalog } = ctx
   const hw: DoorHardware = {
     hinge: findHardware(catalog, cabinet.hardware.hingeId, 'hinge'),
-    plate: firstOfKind(catalog, 'hinge-plate'),
+    // Frameless plates screw to the carcass side; a face-frame cabinet takes a
+    // face-frame plate (`props.faceFrame = 1`) or none if the catalog has none.
+    plate: selectHingePlate(catalog, ctx.dims.faceFrame),
     pull: findHardware(catalog, cabinet.hardware.pullId, 'pull'),
   }
   const doorBays = units.flatMap((u) => u.layout.bays.filter((b) => b.bay.kind === 'door').map((bay) => ({ bay, faces: u.faces })))

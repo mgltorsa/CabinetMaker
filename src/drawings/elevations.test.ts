@@ -68,6 +68,19 @@ describe('frontElevation', () => {
     // hinge right from the role keyword → swing lines meet at x = 600
     expect(withPull.shapes).toContainEqual(expect.objectContaining({ type: 'line', layer: 'hidden', x2: 600 }))
   })
+
+  it('draws no pull on an engine-built front without pull ops (engine omitted it)', () => {
+    // A 120 mm drawer front is too short for the engine to drill pull holes;
+    // engine parts carry a `frame`, so the drawing must not invent a pull.
+    const low = fixturePart({ role: 'drawer-front-1-1', name: 'Drawer front', group: 'front', box: [1.5, 598.5, 700, 820, 580, 598], length: 'x', thickness: 'z' })
+    const framed = { ...low, frame: { x: '+x', y: '-y', z: '-z' } as const }
+    const outlineLines = (s: Shape[]): number => s.filter((x) => x.type === 'line' && x.layer === 'outline').length
+    const draw = (p: typeof low): Shape[] => frontElevation(cabinet, { cabinetId: cabinet.id, parts: [p], hardware: [], warnings: [] }, 'metric').shapes
+    const noPullCabinet = { ...cabinet, hardware: { ...cabinet.hardware, pullId: null } }
+    const baseline = outlineLines(frontElevation(noPullCabinet, { cabinetId: cabinet.id, parts: [framed], hardware: [], warnings: [] }, 'metric').shapes)
+    expect(outlineLines(draw(framed))).toBe(baseline)
+    expect(outlineLines(draw(low))).toBe(baseline + 1)
+  })
 })
 
 describe('sideElevation', () => {

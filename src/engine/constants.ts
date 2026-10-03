@@ -5,10 +5,25 @@
  */
 import type { Mm } from '@/core/types'
 
+/**
+ * How a slide family derives the drawer-box width from the clear opening
+ * width (LW, between the section panels):
+ * - 'inside': the runner locates on the inside of the box sides, so the
+ *   INSIDE box width is LW − deduction and the outside width grows with the
+ *   actual side thickness (outside = LW − deduction + 2 × side thickness).
+ * - 'outside': the runner sits between the box side and the cabinet side, so
+ *   the OUTSIDE box width is LW − deduction whatever the side thickness.
+ */
+export interface SlideWidthRule {
+  basis: 'inside' | 'outside'
+  deduction: Mm
+}
+
 /** Drawer slide planning values for one slide family. */
 export interface SlideClearances {
-  /** Opening width minus outside drawer-box width (both sides together). */
-  sideClearanceTotal: Mm
+  width: SlideWidthRule
+  /** Thickest drawer-box side the runner supports; thicker sides get a warning. */
+  maxSideThickness: Mm
   /** Gap from the opening bottom to the underside of the box sides. */
   bottomClearance: Mm
   /** Gap from the top of the box sides to the opening top. */
@@ -22,12 +37,15 @@ export interface SlideClearances {
 /**
  * Blum TANDEM plus BLUMOTION (563H/569H) and MOVENTO (760H/766H) undermount
  * runners. Source: Blum planning guides — "inside drawer width = LW − 42 mm"
- * with 16 mm sides (outside width = LW − 10 mm), drawer bottom recessed 13 mm,
- * drawer length = nominal runner length (NL). Vertical clearances follow the
- * runner profile height. Verify against manufacturer spec.
+ * for drawer sides up to 16 mm thick (so 16 mm sides give an outside width of
+ * LW − 10 mm, 12 mm sides LW − 18 mm), drawer bottom recessed 13 mm, drawer
+ * length = nominal runner length (NL). Vertical clearances follow the runner
+ * profile height. Verify against the current manufacturer spec, including the
+ * side-thickness range of the exact runner ordered.
  */
 export const UNDERMOUNT_CLEARANCES: SlideClearances = {
-  sideClearanceTotal: 10,
+  width: { basis: 'inside', deduction: 42 },
+  maxSideThickness: 16,
   bottomClearance: 14,
   topClearance: 6,
   bottomRecess: 13,
@@ -35,21 +53,34 @@ export const UNDERMOUNT_CLEARANCES: SlideClearances = {
 }
 
 /**
- * Generic ball-bearing side-mount slides: 12.7 mm (1/2") per side is the
- * industry-standard clearance (e.g. Accuride 3832 data sheet). Verify against
- * manufacturer spec.
+ * Generic ball-bearing, full-extension side-mount slides: 12.7 mm (1/2") per
+ * side between the box and the cabinet side is the common industry spec (e.g.
+ * Accuride 3832 data sheet), so outside width = LW − 25.4 mm. The runner screws
+ * to the outside of the box side, so side thickness is not limited by the
+ * slide. Verify against the manufacturer spec of the slide ordered.
  */
+export const SIDE_MOUNT_SIDE_CLEARANCE: Mm = 12.7
 export const SIDE_MOUNT_CLEARANCES: SlideClearances = {
-  sideClearanceTotal: 25.4,
+  width: { basis: 'outside', deduction: 2 * SIDE_MOUNT_SIDE_CLEARANCE },
+  maxSideThickness: Infinity,
   bottomClearance: 10,
   topClearance: 10,
   bottomRecess: 10,
   runnerHoleHeight: 37,
 }
 
-/** Catalog `mount` prop values for slides (`props.mount`). */
+/**
+ * Catalog `mount` prop values for slides (`HardwareItem.props.mount`):
+ * 0 = undermount, 1 = side-mount. Slides without a `mount` prop match either.
+ */
 export const SLIDE_MOUNT_UNDERMOUNT = 0
 export const SLIDE_MOUNT_SIDE = 1
+
+/**
+ * Catalog `faceFrame` prop for hinge plates (`HardwareItem.props.faceFrame`):
+ * 1 = face-frame mounting plate; absent or 0 = frameless (carcass side) plate.
+ */
+export const HINGE_PLATE_FACE_FRAME = 1
 
 /** Runner screw positions measured back from the opening front: System 32 points 37 + 32·k. */
 export const RUNNER_HOLE_SYSTEM32_STEPS: readonly number[] = [0, 7, 14]

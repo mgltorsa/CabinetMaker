@@ -27,7 +27,14 @@ export const DEFAULT_MATERIALS: Material[] = [
   { kind: 'linear', id: 'maple-19x63', name: 'Maple 19 × 63 mm (face frames)', thickness: 19, width: 63, stockLength: 2440, costPerMetre: 12 },
 ]
 
-const slide = (lengthMm: number, sku: string, cost: number): HardwareItem => ({
+/*
+ * Slide props: `length` = nominal slide length (mm, = drawer-box length);
+ * `mount` = 0 undermount, 1 side-mount (engine/constants SLIDE_MOUNT_*).
+ * Slides without `mount` match either construction.
+ * Hinge-plate props: `height` (mm); `faceFrame` = 1 for a face-frame plate,
+ * absent/0 for a frameless (carcass-side) plate (engine/constants HINGE_PLATE_FACE_FRAME).
+ */
+const undermountSlide = (lengthMm: number, sku: string, cost: number): HardwareItem => ({
   id: `blum-tandem-${lengthMm}`,
   kind: 'slide',
   name: `Undermount slide ${lengthMm} mm (pair)`,
@@ -37,12 +44,29 @@ const slide = (lengthMm: number, sku: string, cost: number): HardwareItem => ({
   props: { length: lengthMm, mount: 0 },
 })
 
+/** Generic full-extension ball-bearing side-mount slides (12.7 mm per side). Verify SKU and spec with the supplier. */
+const sideMountSlide = (lengthMm: number, cost: number): HardwareItem => ({
+  id: `bb-side-${lengthMm}`,
+  kind: 'slide',
+  name: `Side-mount ball-bearing slide ${lengthMm} mm, full extension (pair)`,
+  manufacturer: 'Generic',
+  sku: `BB-SM-${lengthMm}`,
+  unitCost: cost,
+  props: { length: lengthMm, mount: 1 },
+})
+
 export const DEFAULT_HARDWARE: HardwareItem[] = [
-  slide(229, 'TANDEM 563H2290B', 28),
-  slide(305, 'TANDEM 563H3050B', 30),
-  slide(381, 'TANDEM 563H3810B', 32),
-  slide(457, 'TANDEM 563H4570B', 34),
-  slide(533, 'TANDEM 563H5330B', 36),
+  undermountSlide(229, 'TANDEM 563H2290B', 28),
+  undermountSlide(305, 'TANDEM 563H3050B', 30),
+  undermountSlide(381, 'TANDEM 563H3810B', 32),
+  undermountSlide(457, 'TANDEM 563H4570B', 34),
+  undermountSlide(533, 'TANDEM 563H5330B', 36),
+  sideMountSlide(300, 12),
+  sideMountSlide(350, 13),
+  sideMountSlide(400, 14),
+  sideMountSlide(450, 15),
+  sideMountSlide(500, 16),
+  sideMountSlide(550, 17),
   { id: 'blum-cliptop-110', kind: 'hinge', name: 'Concealed hinge 110°, full overlay', manufacturer: 'Blum', sku: 'CLIP top 71B3550', unitCost: 6.5, props: { openingAngle: 110, cupDiameter: 35 } },
   { id: 'blum-plate-0', kind: 'hinge-plate', name: 'Hinge mounting plate 0 mm', manufacturer: 'Blum', sku: 'CLIP 173L6100', unitCost: 2.2, props: { height: 0 } },
   { id: 'pull-bar-128', kind: 'pull', name: 'Bar pull 128 mm c/c', manufacturer: 'Generic', sku: 'BAR-128', unitCost: 4, props: { centers: 128 } },
