@@ -234,3 +234,25 @@ TypeScript strict + `noUncheckedIndexedAccess`, ESLint (next), Vitest unit and i
 - **Web worker for the pipeline**: only needed once rooms have dozens of cabinets; the pipeline is pure so moving it is cheap later.
 - **Undo/redo**: easy with immutable `Project` snapshots; add once the editor settles.
 - **Hosted analytics**: optional, not product.
+
+## Status after the first build (3 Oct 2026)
+
+Built in parallel by six module agents (engine, nest, CAM, estimate, drawings, UI) against `src/core/types.ts`, merged into one branch, then reviewed against ECC's code, TypeScript, security and React reviewer checklists. Gates: `pnpm verify` (typecheck, lint, ~1700 unit, property and invariant tests, static build) and `pnpm e2e` (13 Playwright tests).
+
+| Phase | State |
+| --- | --- |
+| P0–P2 engine | Done: frameless and face frame, overlay and inset, sections/bays, doors, drawers (Blum-derived clearances, chosen or auto slide), shelves on System 32 rows, captured back, dado/dowel/Domino ops, toe kick, stretchers, nailers, countertop. `validateBuild` passes on all presets and 1000 random cabinets |
+| P3 nest + PDF | Done: MaxRects, grain, kerf, gap ≥ profile tool diameter; plan book PDF from the same drawing model as the screen |
+| P4 CAM preview | Done: drill/pocket/dado/profile with tabs or onion skin, ramp feeds capped by plunge feed, G21 `.nc` per sheet, parser round-trip test, export blocked on any CAM error |
+| P5 estimate | Done: sheets, linear stock, hardware with SKUs, labor buckets, margin; CSV with formula-injection guard |
+| P8-lite presets | Done for every `CabinetType` |
+| P6 room, P7 accounts | Not started; model reserves `Project.room` and `Cabinet.placement` |
+
+Review findings fixed during the build: panel frame shared across modules (`src/core/panel.ts`), sheet numbering, drill accepted as a router tool, helix plunging at cut feed, duplicate tool numbers, nest gap vs tool diameter, drawer box width for 12 mm sides, slide choice ignored, phantom pulls in elevations, import validation (ranges, unique ids).
+
+Next, in priority order:
+1. **Simulator view** for `.nc` (plan risk #1): animate parsed G-code over the sheet before download.
+2. **Ramp entries** on profiles and dados, and travel ordering (CAM currently plunges straight and retracts each pass).
+3. **Undo/redo** over `Project` snapshots.
+4. **P6 room**: walls, run placement, plan/elevation, open a cabinet.
+5. Catalog review with real supplier data (all SKUs and prices are placeholders).
