@@ -126,7 +126,7 @@ export function CutPlanView({ project, result }: CutPlanViewProps) {
               make={() => {
                 const material = project.materials.find((m) => m.id === sheet.materialId)
                 return sheetLayout(sheet, partsById, units, {
-                  edgeTrim: project.nest.edgeTrim,
+                  edgeTrim: (result.nestSettings ?? project.nest).edgeTrim,
                   materialName: materialName(project, sheet.materialId),
                   grained: material?.kind === 'sheet' ? material.grained : undefined,
                 })

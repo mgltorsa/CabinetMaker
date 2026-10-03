@@ -145,6 +145,14 @@ describe('loadProject / saveProject', () => {
     expect(storage.getItem(REJECTED_STORAGE_KEY)).toBe(stale)
   })
 
+  it('tells the caller why a saved project was rejected', () => {
+    const storage = new MemoryStorage()
+    storage.data.set(STORAGE_KEY, JSON.stringify({ ...fixtureProject(), tools: [{ ...fixtureProject().tools[0], stepDown: 0.001 }] }))
+    const onRejected = vi.fn()
+    loadProject(storage, onRejected)
+    expect(onRejected).toHaveBeenCalledWith(expect.stringContaining('stepDown'))
+  })
+
   it('reports failed writes instead of throwing', () => {
     expect(saveProject(throwingStorage, fixtureProject())).toBe(false)
   })

@@ -21,7 +21,8 @@ import type {
   UnitSystem,
 } from '@/core/types'
 import { createPreset } from '@/engine/presets'
-import { browserStorage, loadProject } from './persistence'
+import { browserStorage, loadProject, REJECTED_STORAGE_KEY } from './persistence'
+import { notify } from './toast'
 import * as ops from './projectOps'
 
 export interface ViewToggles {
@@ -156,7 +157,12 @@ let browserStore: DesignerStore | null = null
 
 /** The app-wide store, created on first client use from the saved project. */
 export function getDesignerStore(): DesignerStore {
-  browserStore ??= createDesignerStore(loadProject(browserStorage()))
+  browserStore ??= createDesignerStore(
+    loadProject(browserStorage(), (error) =>
+      // Deferred: the store may be created during a render.
+      queueMicrotask(() => notify('error', `Saved project could not be loaded (${error}). Started a new project; the old data is kept under "${REJECTED_STORAGE_KEY}" in browser storage.`)),
+    ),
+  )
   return browserStore
 }
 

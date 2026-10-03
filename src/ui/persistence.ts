@@ -33,9 +33,10 @@ export function serializeProject(project: Project): string {
 
 /**
  * Saved project if present and valid, otherwise a fresh default project. An
- * invalid saved project is copied to `REJECTED_STORAGE_KEY` first.
+ * invalid saved project is copied to `REJECTED_STORAGE_KEY` first and
+ * `onRejected` is called with the validation error.
  */
-export function loadProject(storage: ProjectStorage | null): Project {
+export function loadProject(storage: ProjectStorage | null, onRejected?: (error: string) => void): Project {
   if (!storage) return createProject()
   try {
     const text = storage.getItem(STORAGE_KEY)
@@ -43,6 +44,7 @@ export function loadProject(storage: ProjectStorage | null): Project {
     const parsed = parseProjectJson(text)
     if (parsed.ok) return parsed.project
     storage.setItem(REJECTED_STORAGE_KEY, text)
+    onRejected?.(parsed.error)
     return createProject()
   } catch {
     // Storage can throw (disabled cookies, privacy mode); start fresh.
