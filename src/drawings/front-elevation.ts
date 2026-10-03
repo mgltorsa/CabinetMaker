@@ -10,7 +10,7 @@ import { circle, dim, line, rect, type Range2 } from './shapes'
 import { FILL_FRONT, type DrawingStyle } from './style'
 
 const VISIBLE_GROUPS: readonly PartGroup[] = ['carcass', 'divider', 'face-frame', 'toe-kick', 'top', 'stretcher']
-/** Default pull length when the front has no pull holes (typical 128 mm c/c bar). */
+/** Schematic pull length for hand-made (frame-less) fronts without pull holes (typical 128 mm c/c bar). */
 const DEFAULT_PULL: Mm = 128
 const PULL_EDGE_INSET: Mm = 40
 const PULL_END_INSET: Mm = 60
@@ -68,7 +68,10 @@ function pullMarks(part: Part, cabinet: Cabinet, style: DrawingStyle): Shape[] {
     }
     return marks
   }
-  if (cabinet.hardware.pullId === null) return []
+  // Engine-built parts (they carry a `frame`) are authoritative: no pull holes
+  // means the engine deliberately omitted the pull (e.g. a front too short for
+  // the pull's centres). Only frame-less, hand-made parts get a schematic pull.
+  if (part.frame !== undefined || cabinet.hardware.pullId === null) return []
   const r = xy(part)
   const w = r.x1 - r.x0
   const h = r.y1 - r.y0

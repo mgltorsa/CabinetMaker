@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { HoleOp } from '@/core/types'
+import { DEFAULT_HARDWARE, DEFAULT_MATERIALS } from '@/core/defaults'
+import type { HardwareItem, HoleOp, Material } from '@/core/types'
+import { buildCabinet } from '.'
 import { bay, build, part, roles, section, testCabinet, usage, warningCodes } from './testkit'
 import { validateBuild } from './validate'
 
@@ -70,6 +72,23 @@ describe('doors (frameless overlay)', () => {
     expect(usage(b, 'blum-plate-0')).toBe(count)
   })
 
+  it('bills no frameless mounting plate on face-frame cabinets', () => {
+    const b = build(testCabinet({ construction: { style: 'face-frame-overlay' }, sections: [section([bay('door')])] }))
+    expect(usage(b, 'blum-cliptop-110')).toBe(2)
+    expect(usage(b, 'blum-plate-0')).toBe(0)
+  })
+
+  it('bills a face-frame plate on face-frame cabinets only when the catalog has one', () => {
+    const ffPlate: HardwareItem = { id: 'ff-plate', kind: 'hinge-plate', name: 'Face-frame plate', manufacturer: 'Blum', sku: 'FF', unitCost: 3, props: { height: 0, faceFrame: 1 } }
+    const catalog = [ffPlate, ...DEFAULT_HARDWARE]
+    const ff = buildCabinet(testCabinet({ construction: { style: 'face-frame-overlay' }, sections: [section([bay('door')])] }), { materials: DEFAULT_MATERIALS, hardware: catalog })
+    expect(usage(ff, 'ff-plate')).toBe(2)
+    expect(usage(ff, 'blum-plate-0')).toBe(0)
+    const frameless = buildCabinet(testCabinet({ sections: [section([bay('door')])] }), { materials: DEFAULT_MATERIALS, hardware: catalog })
+    expect(usage(frameless, 'blum-plate-0')).toBe(2)
+    expect(usage(frameless, 'ff-plate')).toBe(0)
+  })
+
   it('drills pull holes through the door and counts one pull per door', () => {
     const b = build(testCabinet({ sections: [section([bay('door', null, { doorCount: 2 })])] }))
     const pulls = part(b, 'door-1-1-1').ops.filter((o) => o.purpose === 'pull')
@@ -106,12 +125,32 @@ describe('drawers', () => {
     expect(part(b, 'drawer-1-1-side-left').length).toBe(533)
   })
 
-  it('sizes boxes from Blum undermount clearances', () => {
+  it('sizes boxes from Blum undermount clearances (inside width = LW − 42 with the actual 12 mm sides)', () => {
     const side = part(b, 'drawer-1-1-side-left')
     const right = part(b, 'drawer-1-1-side-right')
-    expect(right.bounds.max.x - side.bounds.min.x).toBe(564 - 10)
+    const outside = right.bounds.max.x - side.bounds.min.x
+    expect(outside).toBe(564 - 42 + 2 * 12)
+    expect(outside - side.thickness - right.thickness).toBe(522)
     const bottom = part(b, 'drawer-1-1-bottom')
     expect(bottom.bounds.min.y - side.bounds.min.y).toBe(13)
+    expect(warningCodes(b)).not.toContain('drawer-side-thickness')
+  })
+
+  it('keeps the inside width with thicker sides and warns when they exceed the runner limit', () => {
+    const thick = build(testCabinet({ construction: { drawerBoxMaterialId: 'ply-18' }, sections: [section([bay('drawer')])] }))
+    const l = part(thick, 'drawer-1-1-side-left')
+    const r = part(thick, 'drawer-1-1-side-right')
+    expect(r.bounds.max.x - l.bounds.min.x - 2 * 18).toBe(522)
+    expect(thick.warnings.find((w) => w.code === 'drawer-side-thickness')).toMatchObject({ level: 'warn' })
+    expect(validateBuild(thick)).toEqual([])
+  })
+
+  it('omits the box when sides are so thick the box would be wider than the opening', () => {
+    const slab: Material = { kind: 'sheet', id: 'slab-25', name: '25 mm', thickness: 25, sheetLength: 2440, sheetWidth: 1220, grained: false, costPerSheet: 1 }
+    const cab = testCabinet({ construction: { drawerBoxMaterialId: 'slab-25' }, sections: [section([bay('drawer')])] })
+    const b = buildCabinet(cab, { materials: [...DEFAULT_MATERIALS, slab], hardware: DEFAULT_HARDWARE })
+    expect(b.parts.some((p) => p.group === 'drawer-box')).toBe(false)
+    expect(warningCodes(b)).toContain('drawer-box-too-small')
   })
 
   it('grooves box sides, front and back for the bottom', () => {

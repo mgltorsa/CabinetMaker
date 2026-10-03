@@ -41,6 +41,9 @@ type PresetBody = Omit<Cabinet, 'id' | 'hardware'> & Partial<Pick<Cabinet, 'hard
 function bodyFor(type: CabinetType): PresetBody {
   const base = defaultCabinet()
   const common = { type, floorHeight: 0, top: base.top }
+  // Presets pick the longest default-catalog slide that fits their depth so
+  // the chosen slide is used as is (no too-long fallback warning).
+  const withSlide = (slideId: string): Cabinet['hardware'] => ({ ...base.hardware, slideId })
   switch (type) {
     case 'base':
       return { ...base, ...common, name: 'Base cabinet' }
@@ -81,6 +84,8 @@ function bodyFor(type: CabinetType): PresetBody {
       return {
         ...common,
         name: 'Nightstand',
+        // 400 − 18 back − 10 rear clearance = 372 available ⇒ 305
+        hardware: withSlide('blum-tandem-305'),
         width: 450,
         height: 600,
         depth: 400,
@@ -92,6 +97,8 @@ function bodyFor(type: CabinetType): PresetBody {
       return {
         ...common,
         name: 'Dresser',
+        // 500 − 18 back − 10 rear clearance = 472 available ⇒ 457
+        hardware: withSlide('blum-tandem-457'),
         width: 1200,
         height: 800,
         depth: 500,
@@ -103,6 +110,8 @@ function bodyFor(type: CabinetType): PresetBody {
       return {
         ...common,
         name: 'Vanity',
+        // 530 − 18 back − 18 nailer − 10 rear clearance = 484 available ⇒ 457
+        hardware: withSlide('blum-tandem-457'),
         width: 900,
         height: 810,
         depth: 530,

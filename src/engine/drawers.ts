@@ -1,10 +1,15 @@
 /**
  * Drawer fronts, drawer boxes and slides.
  *
- * Slide: the longest catalog slide that fits the interior depth (behind the
- * front, in front of the back/nailer) minus `drawer.rearClearance`; one pair
- * per drawer. Box: length = slide length; width = clear opening − slide side
- * clearance; height = clear opening − slide top/bottom clearance. Sides run
+ * Slide: the cabinet's chosen slide (`hardware.slideId`) when it is of the
+ * construction's mount and fits the interior depth (behind the front, in
+ * front of the back/nailer) minus `drawer.rearClearance`; otherwise, with a
+ * warning, the longest fitting catalog slide of the chosen family (same
+ * manufacturer and mount) or of the mount. One pair per drawer. Box: length =
+ * slide length; width from the slide's width rule (undermount: inside width =
+ * opening − deduction, so the outside width follows the side thickness;
+ * side-mount: outside width = opening − 2 × side clearance); height = clear
+ * opening − slide top/bottom clearance. Sides run
  * the full box length; front and back sit between them (into dados when the
  * drawer joinery is dado); the bottom is captured in grooves `bottomRecess`
  * above the lower edge.
@@ -12,7 +17,7 @@
  * Face A: fronts −Z (inside); box sides face inward, box front faces the back,
  * box back faces the front, bottom faces up.
  */
-import type { BuildWarning, HardwareItem, SignedAxis } from '@/core/types'
+import type { BuildWarning, HardwareItem, Mm, SignedAxis, WarningLevel } from '@/core/types'
 import {
   MIN_DRAWER_BOX_HEIGHT,
   MIN_DRAWER_BOX_WIDTH,
@@ -26,11 +31,12 @@ import {
   SYSTEM32_SETBACK,
   UNDERMOUNT_CLEARANCES,
   type SlideClearances,
+  type SlideWidthRule,
 } from './constants'
 import { emptyResult, mergeResults, warning, type BuildContext, type RuleResult } from './context'
 import { dadoDepth } from './dims'
 import { boxOf, makePart, span, spanMid, spanSize, type FramedPart, type Span } from './geometry'
-import { findHardware, selectSlide, slidesFor } from './hardware'
+import { chooseSlide, findHardware, type SlideChoice } from './hardware'
 import { jointOps, type Fasteners, type JointSpec } from './joinery'
 import type { BayLayout } from './layout'
 import type { PlacedOp } from './ops'
@@ -43,20 +49,51 @@ export function buildDrawers(ctx: BuildContext, units: readonly SectionUnit[], f
   if (drawerBays.length === 0) return emptyResult()
   const c = cabinet.construction.drawer
   const available = d.frontZ.lo - d.rearLimitZ - c.rearClearance
-  const slides = slidesFor(catalog, c.slideMount, cabinet.hardware.slideId)
-  const slide = selectSlide(slides, available)
+  const choice = chooseSlide(catalog, c.slideMount, cabinet.hardware.slideId, available)
+  const slide = choice.slide
   const pull = findHardware(catalog, cabinet.hardware.pullId, 'pull')
-  const warnings: BuildWarning[] = []
-  if (!slide) {
-    const why = slides.length === 0 ? `The catalog has no ${c.slideMount} slides` : `No ${c.slideMount} slide fits the ${Math.round(available)} mm available depth`
-    warnings.push(warning(cabinet.id, 'warn', 'no-slide-fits', `${why}; drawer boxes omitted`))
-  }
+  const warnings = slideWarnings(ctx, choice, available)
   const results = drawerBays.map(({ bay, unit }) => {
     const front = buildFront(ctx, bay, pull)
     if (!slide || !front) return front ?? emptyResult()
     return mergeResults(front, buildBox(ctx, bay, slide, unit, fasteners))
   })
   return mergeResults(...results, { ...emptyResult(), warnings })
+}
+
+function slideWarnings(ctx: BuildContext, choice: SlideChoice, available: Mm): BuildWarning[] {
+  const { cabinet, mats } = ctx
+  const mount = cabinet.construction.drawer.slideMount
+  const requestedId = cabinet.hardware.slideId
+  const { slide, requested, reason } = choice
+  const depth = Math.round(available)
+  const add = (level: WarningLevel, code: string, message: string): BuildWarning => warning(cabinet.id, level, code, message)
+  const out: BuildWarning[] = []
+  if (reason === 'unknown') out.push(add('warn', 'unknown-hardware', `Slide ${requestedId} is not in the catalog`))
+  if (!slide) {
+    const why = choice.candidates.length === 0 ? `The catalog has no ${mount} slides` : `No ${mount} slide fits the ${depth} mm available depth`
+    return [...out, add('warn', 'no-slide-fits', `${why}; drawer boxes omitted`)]
+  }
+  if (reason === 'too-long' && requested) {
+    out.push(add('warn', 'slide-too-long', `${requested.name} (${requested.props.length ?? '?'} mm) does not fit the ${depth} mm available depth; using ${slide.name}`))
+  }
+  if (reason === 'mount-mismatch' && requested) {
+    out.push(add('info', 'slide-mount-mismatch', `${requested.name} is not a ${mount} slide; using ${slide.name}`))
+  }
+  const cl = clearancesFor(ctx)
+  if (mats.drawerBox.thickness > cl.maxSideThickness) {
+    out.push(add('warn', 'drawer-side-thickness', `Drawer-box sides are ${mats.drawerBox.thickness} mm; ${mount} runners take sides up to ${cl.maxSideThickness} mm`))
+  }
+  return out
+}
+
+/**
+ * Outside drawer-box width for a clear opening width. Inside-located runners
+ * (undermount) fix the inside width, so the outside width follows the actual
+ * side thickness; side-mount runners fix the outside width.
+ */
+function drawerBoxOutsideWidth(rule: SlideWidthRule, openingWidth: Mm, sideThickness: Mm): Mm {
+  return rule.basis === 'inside' ? openingWidth - rule.deduction + 2 * sideThickness : openingWidth - rule.deduction
 }
 
 function buildFront(ctx: BuildContext, b: BayLayout, pull: HardwareItem | undefined): RuleResult | null {
@@ -87,10 +124,11 @@ function buildBox(ctx: BuildContext, b: BayLayout, slide: HardwareItem, unit: Se
   const name = `Drawer ${b.section + 1}.${b.index + 1}`
   const dt = mats.drawerBox.thickness
   const clearX = unit.layout.clearX
-  const outsideW = spanSize(clearX) - cl.sideClearanceTotal
+  const outsideW = drawerBoxOutsideWidth(cl.width, spanSize(clearX), dt)
   const by = span(b.openingY.lo + cl.bottomClearance, b.openingY.hi - cl.topClearance)
   const bottomY = span(by.lo + cl.bottomRecess, by.lo + cl.bottomRecess + mats.drawerBottom.thickness)
-  if (spanSize(by) < MIN_DRAWER_BOX_HEIGHT || bottomY.hi > by.hi - dt || outsideW - 2 * dt < MIN_DRAWER_BOX_WIDTH) {
+  const tooNarrow = outsideW - 2 * dt < MIN_DRAWER_BOX_WIDTH || outsideW > spanSize(clearX)
+  if (spanSize(by) < MIN_DRAWER_BOX_HEIGHT || bottomY.hi > by.hi - dt || tooNarrow) {
     return { ...emptyResult(), warnings: [warning(cabinet.id, 'warn', 'drawer-box-too-small', `${name}: opening too small for a drawer box; box omitted`)] }
   }
   const length = slide.props.length ?? 0

@@ -22,6 +22,12 @@ function centersOf(pull: HardwareItem): Mm {
   return pull.props.centers ?? DEFAULT_PULL_CENTERS
 }
 
+/**
+ * Through hole for the pull's machine screws, drilled from face A (the inside
+ * face, where the screw heads sit). `depth === front.thickness` is the
+ * "through" signal: CAM is expected to add the machine's `throughCutExtra` so
+ * the drill breaks out of the show face cleanly.
+ */
 function hole(front: FramedPart, x: Mm, y: Mm): PlacedOp {
   return holeOp(front, { x, y, z: front.bounds.min.z }, '-z', { diameter: PULL_HOLE_DIAMETER, depth: front.thickness, purpose: 'pull' })
 }
