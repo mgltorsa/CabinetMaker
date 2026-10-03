@@ -77,7 +77,11 @@ function planGroove(
   kind: 'dado' | 'pocket',
 ): OpPlan {
   const tool = ctx.tools.dado
-  if (!tool) return { status: 'manual', reason: 'no usable dado tool on the machine', warnings: [] }
+  // `resolveTools` already rejects drills; re-checked so a hand-built CamTools cannot groove with one.
+  if (!tool || tool.kind === 'drill') {
+    const why = tool ? ` (T${tool.number} is a drill)` : ''
+    return { status: 'manual', reason: `no usable dado tool on the machine${why}`, warnings: [] }
+  }
   const result = groovePasses(ctx, spec, tool)
   if (!result.ok) return { status: 'manual', reason: result.reason, warnings: [] }
   return {

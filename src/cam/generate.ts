@@ -1,6 +1,8 @@
 /**
  * Sheet → toolpaths. Every op on every placed part is either machined or
- * listed in `manualOps`; every placement problem becomes a warning.
+ * listed in `manualOps`; every placement problem becomes a warning, including
+ * parts too close for the profile tool and cuts that reach a neighbouring
+ * part (see `./neighbours`).
  */
 import type { BuildWarning, CamResult, Part, Placement, Sheet, Toolpath } from '@/core/types'
 import { boundsWarnings } from './checks'
@@ -8,10 +10,12 @@ import { GEOMETRY_EPSILON } from './constants'
 import { makePartContext, partWarning, type PartContext } from './context'
 import { formatForMessage as f } from './format'
 import { machineWarnings } from './machine'
+import { neighbourWarnings, type PlacedFootprint } from './neighbours'
 import { planOp } from './ops'
 import { orderToolpaths } from './order'
 import { planProfile } from './profile'
 import { resolveTools, type CamTools } from './tools'
+import { partFootprint } from './transform'
 import type { CamInput, PlannedToolpath } from './types'
 
 type ManualOp = CamResult['manualOps'][number]
@@ -20,6 +24,8 @@ interface PartResult {
   ops: PlannedToolpath[]
   profile: PlannedToolpath | null
   area: number
+  /** Sheet-space footprint, null when the placement is invalid (nothing is machined). */
+  footprint: PlacedFootprint | null
   manualOps: ManualOp[]
   warnings: BuildWarning[]
 }
@@ -61,6 +67,7 @@ function skippedPart(part: Part, reason: string): PartResult {
     ops: [],
     profile: null,
     area: 0,
+    footprint: null,
     manualOps: part.ops.map((op) => ({ partId: part.id, opId: op.id, reason })),
     warnings: [{ level: 'error', code: 'cam/placement-invalid', message: `Not machined: ${reason}`, cabinetId: part.cabinetId, partId: part.id }],
   }
@@ -81,7 +88,8 @@ function planPart(sheet: Sheet, part: Part, placement: Placement, input: CamInpu
   }
   const profile = planProfile(ctx)
   warnings.push(...profile.warnings)
-  return { ops, profile: profile.toolpath, area: part.length * part.width, manualOps, warnings }
+  const footprint = { partId: part.id, cabinetId: part.cabinetId, rect: partFootprint(placement, part) }
+  return { ops, profile: profile.toolpath, area: part.length * part.width, footprint, manualOps, warnings }
 }
 
 function sheetWarnings(input: CamInput): BuildWarning[] {
@@ -125,10 +133,16 @@ export function generateToolpaths(input: CamInput): CamResult {
     .sort((a, b) => a.area - b.area || a.profile.partId.localeCompare(b.profile.partId))
     .map((r) => r.profile)
   const ordered = orderToolpaths([...results.flatMap((r) => r.ops), ...profiles])
+  const footprints = results.map((r) => r.footprint).filter((fp): fp is PlacedFootprint => fp !== null)
   return {
     sheetId: sheet.id,
     toolpaths: ordered.map((p) => toToolpath(sheet, p)),
     manualOps: results.flatMap((r) => r.manualOps),
-    warnings: [...warnings, ...results.flatMap((r) => r.warnings), ...ordered.flatMap((p) => boundsWarnings(p, sheet, machine))],
+    warnings: [
+      ...warnings,
+      ...results.flatMap((r) => r.warnings),
+      ...ordered.flatMap((p) => boundsWarnings(p, sheet, machine)),
+      ...neighbourWarnings(footprints, ordered),
+    ],
   }
 }

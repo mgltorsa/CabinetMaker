@@ -17,3 +17,17 @@ export const GEOMETRY_EPSILON = 0.001
 
 /** Fewest tabs any profiled part gets when tabs are enabled. */
 export const MIN_TABS_PER_PART = 4
+
+/**
+ * Steepest helical ramp into a circular pocket, in degrees from horizontal.
+ * Conservative general shop practice for solid-carbide end mills in sheet
+ * goods is a 2–10° ramp; we use the top of that range and add helix turns
+ * until each one descends no more steeply.
+ */
+export const MAX_HELIX_ANGLE_DEG = 10
+
+/**
+ * A helix needing more turns than this (its radius is tiny, so it is almost a
+ * plunge anyway) is replaced by a straight plunge at the plunge feed.
+ */
+export const MAX_HELIX_TURNS = 12

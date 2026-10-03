@@ -1,5 +1,5 @@
 /** Public and shared types of the CAM module. */
-import type { BuildWarning, Machine, Part, Sheet, Tool, ToolpathKind, Vec3 } from '@/core/types'
+import type { BuildWarning, Machine, Mm, Part, Sheet, Tool, ToolpathKind, Vec3 } from '@/core/types'
 
 export interface CamInput {
   sheet: Sheet
@@ -13,8 +13,10 @@ export interface GcodeOptions {
   programName: string
   /** Sheet id for the banner; defaults to the toolpaths' sheet id. */
   sheetId?: string
-  /** Material description for the banner. */
+  /** Material description for the banner, e.g. the material name. */
   material?: string
+  /** Stock thickness (mm) for the banner, e.g. `sheet.thickness`. */
+  thickness?: Mm
 }
 
 /** A run of consecutive G1 moves (between rapids / tool changes), absolute mm. */

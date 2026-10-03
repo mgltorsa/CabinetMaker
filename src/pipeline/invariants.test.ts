@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { fixtureProject } from '@/core/fixtures'
 import type { Project } from '@/core/types'
 import { emitGcode, generateToolpaths, parseGcode } from '@/cam'
+import { downwardFeedViolations } from '@/cam/testing/feeds'
 import { sheetLayout } from '@/drawings'
 import { buildPlanPdf, planPageCount } from '@/drawings/pdf'
 import { validateBuild } from '@/engine/validate'
@@ -29,7 +30,7 @@ describe.each(projectsUnderTest().map((p) => [p.cabinets.length, p] as const))('
   })
 
   it('places every sheet part exactly once', () => {
-    expect(validateNest(nest, build.parts, project.materials, project.nest)).toEqual([])
+    expect(validateNest(nest, build.parts, project.materials, result.nestSettings ?? project.nest)).toEqual([])
     expect(nest.unplaced).toEqual([])
     const placed = nest.sheets.flatMap((s) => s.placements.map((p) => p.partId))
     expect(placed.length + nest.linearPartIds.length).toBe(build.parts.length)
@@ -74,6 +75,14 @@ describe.each(projectsUnderTest().map((p) => [p.cabinets.length, p] as const))('
     }
   })
 
+  it('never feeds down faster than the plunge feed in emitted G-code', () => {
+    for (const sheet of nest.sheets) {
+      const cam = generateToolpaths({ sheet, parts: partsById, machine: project.machine, tools: project.tools })
+      const gcode = emitGcode(cam.toolpaths, project.machine, project.tools, { programName: sheet.id })
+      expect(downwardFeedViolations(gcode, project.tools)).toEqual([])
+    }
+  })
+
   it('numbers sheet layouts from 1 per material, matching sheet ids', () => {
     for (const sheet of nest.sheets) {
       expect(sheet.id).toBe(`${sheet.materialId}#${sheet.index}`)
@@ -88,5 +97,34 @@ describe.each(projectsUnderTest().map((p) => [p.cabinets.length, p] as const))('
     const { PDFDocument } = await import('pdf-lib')
     const doc = await PDFDocument.load(bytes)
     expect(doc.getPageCount()).toBe(planPageCount(project, result))
+  })
+})
+
+/** Projects whose profile tool is wider than the nest kerf: the pipeline must widen the gap. */
+function wideToolProjects(): [string, Project][] {
+  return projectsUnderTest().flatMap((base) =>
+    [12.7, 19.05].map((diameter): [string, Project] => [
+      `${base.cabinets.length} cabinets, ${diameter} mm profile tool`,
+      { ...base, tools: base.tools.map((t) => (t.id === base.machine.profileToolId ? { ...t, diameter } : t)) },
+    ]),
+  )
+}
+
+describe.each(wideToolProjects())('pipeline compensates a profile tool wider than the kerf (%s)', (_label, project) => {
+  const result = runPipeline(project)
+  const { build, nest, partsById } = result
+
+  it('keeps the persisted nest settings and nests with a wider gap', () => {
+    expect(project.nest.kerf).toBeLessThan(project.tools.find((t) => t.id === project.machine.profileToolId)?.diameter ?? 0)
+    expect(validateNest(nest, build.parts, project.materials, result.nestSettings ?? project.nest)).toEqual([])
+    expect(nest.unplaced).toEqual([])
+  })
+
+  it('produces CAM without error-level warnings', () => {
+    expect(nest.sheets.length).toBeGreaterThan(0)
+    for (const sheet of nest.sheets) {
+      const cam = generateToolpaths({ sheet, parts: partsById, machine: project.machine, tools: project.tools })
+      expect(cam.warnings.filter((w) => w.level === 'error')).toEqual([])
+    }
   })
 })

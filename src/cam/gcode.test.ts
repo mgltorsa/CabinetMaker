@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Toolpath } from '@/core/types'
 import { emitGcode, generateToolpaths, parseGcode } from './index'
+import { downwardFeedViolations } from './testing/feeds'
 import { dado, hole, makeInput, makeMachine, makePart, makeTools, placeAt } from './testing/fixtures'
 
 function sheetProgram(): { toolpaths: Toolpath[]; gcode: string } {
@@ -121,6 +122,78 @@ describe('emitGcode options and failures', () => {
   })
 })
 
+describe('emitGcode feeds on downward moves', () => {
+  it('never feeds down faster than the plunge feed (helical pocket entries)', () => {
+    const part = makePart({ ops: [hole('cup', 100, 100, 35, 13), hole('small', 250, 100, 8, 10)] })
+    const input = makeInput([part], [placeAt(part, 20, 20)])
+    const gcode = emitGcode(generateToolpaths(input).toolpaths, input.machine, input.tools, { programName: 'p' })
+    expect(gcode).toMatch(/\(pocket /)
+    expect(downwardFeedViolations(gcode, input.tools)).toEqual([])
+  })
+
+  it('slows a steep ramp so its vertical rate equals the plunge feed', () => {
+    const tp: Toolpath = {
+      id: 'ramp',
+      sheetId: 's',
+      partId: null,
+      kind: 'pocket',
+      toolId: 't1',
+      passes: [[{ x: 0, y: 0, z: 0 }, { x: 3, y: 4, z: -5 }]],
+    }
+    const out = lines(emitGcode([tp], makeMachine(), makeTools(), { programName: 'p' }))
+    // length √50 = 7.071; plunge 1000 × 7.071 / 5 = 1414.213 (rounded down), below the 4000 cut feed
+    expect(out).toContain('G1 X3 Y4 Z-5 F1414.213')
+  })
+
+  it('keeps the cut feed on a shallow ramp and on level or rising moves', () => {
+    const tp: Toolpath = {
+      id: 'shallow',
+      sheetId: 's',
+      partId: null,
+      kind: 'pocket',
+      toolId: 't1',
+      passes: [[{ x: 0, y: 0, z: -1 }, { x: 100, y: 0, z: -2 }, { x: 200, y: 0, z: -2 }, { x: 200, y: 0, z: -1 }]],
+    }
+    const out = lines(emitGcode([tp], makeMachine(), makeTools(), { programName: 'p' }))
+    expect(out).toContain('G1 X100 Z-2 F4000')
+    expect(out).toContain('G1 X200')
+    expect(out).toContain('G1 Z-1 F1000')
+  })
+})
+
+describe('emitGcode tool numbers', () => {
+  it('throws when two used tools share a tool number', () => {
+    const tools = makeTools().map((t) => (t.id === 't2' ? { ...t, number: 1 } : t))
+    const paths: Toolpath[] = ['t1', 't2'].map((toolId) => ({
+      id: toolId,
+      sheetId: 's',
+      partId: null,
+      kind: 'dado',
+      toolId,
+      passes: [[{ x: 10, y: 10, z: -1 }, { x: 20, y: 10, z: -1 }]],
+    }))
+    expect(() => emitGcode(paths, makeMachine(), tools, { programName: 'p' })).toThrow(/T1/)
+  })
+
+  it('allows duplicate numbers on tools the program does not use', () => {
+    const tools = makeTools().map((t) => (t.id === 't2' ? { ...t, number: 1 } : t))
+    const tp: Toolpath = { id: 'x', sheetId: 's', partId: null, kind: 'drill', toolId: 't3', passes: [[{ x: 5, y: 5, z: -3 }]] }
+    expect(() => emitGcode([tp], makeMachine(), tools, { programName: 'p' })).not.toThrow()
+  })
+})
+
+describe('emitGcode banner', () => {
+  it('names the material and its thickness when given', () => {
+    const out = emitGcode([], makeMachine(), makeTools(), { programName: 'p', material: 'Baltic birch 18', thickness: 18 })
+    expect(out).toContain('(Material: Baltic birch 18, 18 mm thick)')
+  })
+
+  it('names the thickness alone when no material is given', () => {
+    const out = emitGcode([], makeMachine(), makeTools(), { programName: 'p', thickness: 12.5 })
+    expect(out).toContain('(Stock thickness: 12.5 mm)')
+  })
+})
+
 describe('round trip: parseGcode(emitGcode(toolpaths)) equals the preview', () => {
   it('reproduces every pass of a sheet with drills, a dado and a tabbed profile', () => {
     const { toolpaths, gcode } = sheetProgram()
@@ -140,6 +213,15 @@ describe('round trip: parseGcode(emitGcode(toolpaths)) equals the preview', () =
       })
     })
     expect(parsed.toolChanges.map((t) => t.tool)).toEqual([3, 2, 1])
+    expect(parsed.warnings).toEqual([])
+  })
+
+  it('reproduces a multi-turn helical pocket entry point for point', () => {
+    const part = makePart({ ops: [hole('cup', 100, 100, 35, 13)] })
+    const input = makeInput([part], [placeAt(part, 20, 20)])
+    const pocket = generateToolpaths(input).toolpaths.filter((t) => t.kind === 'pocket')
+    const parsed = parseGcode(emitGcode(pocket, input.machine, input.tools, { programName: 'p' }))
+    expect(parsed.polylines.map((p) => p.points)).toEqual(pocket.flatMap((t) => t.passes))
     expect(parsed.warnings).toEqual([])
   })
 

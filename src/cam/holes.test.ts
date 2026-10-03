@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Vec3 } from '@/core/types'
+import { MAX_HELIX_ANGLE_DEG } from './constants'
 import { planHole } from './holes'
 import { planOp } from './ops'
-import { hole, makeContext, makePart, makeTools } from './testing/fixtures'
+import { hole, makeContext, makeMachine, makePart, makeSheet, makeTools, placeAt } from './testing/fixtures'
 import type { OpPlan, PlannedToolpath } from './types'
 
 function machined(plan: OpPlan): PlannedToolpath {
@@ -48,10 +49,55 @@ describe('planHole: drilling', () => {
     expect(machined(planHole(hole('h', 37, 50, 4.8, 5), ctx)).kind).toBe('drill')
   })
 
-  it('warns when a hole is deeper than the flutes and the stock', () => {
-    const plan = planHole(hole('h1', 37, 50, 5, 25), ctx)
+  it('warns when a hole is deeper than the flutes', () => {
+    const tools = makeTools().map((t) => (t.id === 't3' ? { ...t, fluteLength: 10 } : t))
+    const plan = planHole(hole('h1', 37, 50, 5, 12), makeContext(part, { tools }))
     expect(plan.status).toBe('machined')
-    expect(plan.warnings.map((w) => w.code)).toEqual(['cam/flute-length', 'cam/deeper-than-stock'])
+    expect(plan.warnings).toEqual([expect.objectContaining({ level: 'error', code: 'cam/flute-length' })])
+  })
+})
+
+describe('planHole: through holes', () => {
+  const part = makePart()
+  const ctx = makeContext(part)
+  const minZ = (tp: PlannedToolpath): number => Math.min(...tp.passes.flat().map((p) => p.z))
+
+  it('drills a hole as deep as the stock through by throughCutExtra', () => {
+    const plan = planHole(hole('h', 37, 50, 5, 18), ctx)
+    expect(minZ(machined(plan))).toBe(-18.3)
+    expect(plan.warnings).toEqual([])
+  })
+
+  it('pockets a through hole with an end mill through by throughCutExtra', () => {
+    const plan = planHole(hole('h', 100, 100, 20, 18), ctx)
+    expect(machined(plan).kind).toBe('pocket')
+    expect(minZ(machined(plan))).toBe(-18.3)
+  })
+
+  it('treats a hole deeper than the stock as through, with a warning', () => {
+    const plan = planHole(hole('h', 37, 50, 5, 25), ctx)
+    expect(minZ(machined(plan))).toBe(-18.3)
+    expect(plan.warnings).toEqual([expect.objectContaining({ level: 'warn', code: 'cam/deeper-than-stock' })])
+  })
+
+  it('ignores a negative throughCutExtra (reported by the machine checks)', () => {
+    const plan = planHole(hole('h', 37, 50, 5, 18), makeContext(part, { machine: makeMachine({ throughCutExtra: -1 }) }))
+    expect(minZ(machined(plan))).toBe(-18)
+  })
+
+  it('checks the flutes against the through depth', () => {
+    const tools = makeTools().map((t) => (t.id === 't3' ? { ...t, fluteLength: 18.1 } : t))
+    const plan = planHole(hole('h', 37, 50, 5, 18), makeContext(part, { tools }))
+    expect(plan.warnings.map((w) => w.code)).toEqual(['cam/flute-length'])
+  })
+
+  it('keeps the hole depth when the stock thickness is invalid', () => {
+    const nan = makeContext(part, { sheet: makeSheet([placeAt(part, 100, 50)], { thickness: Number.NaN }) })
+    expect(minZ(machined(planHole(hole('h', 37, 50, 5, 12), nan)))).toBe(-12)
+  })
+
+  it('leaves blind holes at their depth', () => {
+    expect(minZ(machined(planHole(hole('h', 37, 50, 5, 17.9), ctx)))).toBe(-17.9)
   })
 })
 
@@ -85,6 +131,29 @@ describe('planHole: circular pockets', () => {
       }
       expect((zs[0] ?? 0) - (zs[zs.length - 1] ?? 0)).toBeLessThanOrEqual(6 + 1e-9)
     })
+  })
+
+  it(`ramps into each level no steeper than ${MAX_HELIX_ANGLE_DEG}°, adding helix turns as needed`, () => {
+    const limit = Math.tan((MAX_HELIX_ANGLE_DEG * Math.PI) / 180) + 1e-3
+    for (const diameter of [35, 12, 8]) {
+      const tp = machined(planHole(hole('h', 100, 100, diameter, 13), ctx))
+      const descending = tp.passes.flatMap((pass) =>
+        pass.slice(1).flatMap((p, i) => {
+          const prev = pass[i]
+          if (!prev || p.z >= prev.z) return []
+          return [{ dz: prev.z - p.z, run: Math.hypot(p.x - prev.x, p.y - prev.y) }]
+        }),
+      )
+      expect(descending.length).toBeGreaterThan(0)
+      descending.forEach(({ dz, run }) => expect(dz / run).toBeLessThanOrEqual(limit))
+    }
+  })
+
+  it('plunges straight down when a helix would need too many turns', () => {
+    const tp = machined(planHole(hole('h', 100, 100, 6.5, 10), ctx))
+    const first = tp.passes[0] ?? []
+    expect(first[0]?.z).toBe(0)
+    expect(first[1]).toEqual({ x: first[0]?.x, y: first[0]?.y, z: -5 })
   })
 
   it('cuts rings counter-clockwise (climb with M3) and within the chord error', () => {
