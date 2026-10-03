@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Part } from '@/core/types'
 import { generateToolpaths } from './index'
-import { allPoints, dado, hole, makeInput, makeMachine, makePart, makeSheet, mortise, placeAt } from './testing/fixtures'
+import { allPoints, dado, hole, makeInput, makeMachine, makePart, makeSheet, makeTools, mortise, placeAt } from './testing/fixtures'
 
 function sidePanel(): Part {
   return makePart({
@@ -149,6 +149,68 @@ describe('generateToolpaths', () => {
     expect(result.warnings.map((w) => w.code)).toEqual(['cam/placement-invalid'])
   })
 
+  it('does not profile with a drill: error, no profile toolpaths', () => {
+    const part = makePart({ ops: [hole('h', 50, 50, 5, 8)] })
+    const result = generateToolpaths(makeInput([part], [placeAt(part, 20, 20)], { machine: makeMachine({ profileToolId: 't3' }) }))
+    expect(result.toolpaths.filter((t) => t.kind === 'profile')).toEqual([])
+    expect(result.warnings.map((w) => [w.level, w.code])).toEqual([
+      ['error', 'cam/tool-kind'],
+      ['error', 'cam/profile-skipped'],
+    ])
+  })
+
+  it('does not cut dados with a drill: error, dado ops reported as manual', () => {
+    const part = makePart({ ops: [dado('d', [0, 150], [400, 150], 6, 6), mortise('m', 200, 100, 30, 5, 12)] })
+    const result = generateToolpaths(makeInput([part], [placeAt(part, 20, 20)], { machine: makeMachine({ dadoToolId: 't3' }) }))
+    expect(result.toolpaths.map((t) => t.kind)).toEqual(['profile'])
+    expect(result.manualOps.map((m) => m.opId)).toEqual(['d', 'm'])
+    expect(result.warnings).toEqual([expect.objectContaining({ level: 'error', code: 'cam/tool-kind' })])
+  })
+})
+
+describe('generateToolpaths: neighbouring parts', () => {
+  const a = makePart({ id: 'cab_1:a', length: 400, width: 300 })
+  const b = makePart({ id: 'cab_1:b', length: 400, width: 300 })
+  const codes = (input: ReturnType<typeof makeInput>): string[] =>
+    generateToolpaths(input).warnings.filter((w) => w.level === 'error').map((w) => w.code)
+
+  it('accepts parts spaced exactly one profile tool diameter apart', () => {
+    expect(codes(makeInput([a, b], [placeAt(a, 20, 20), placeAt(b, 420 + 6.35, 20)]))).toEqual([])
+  })
+
+  it('errors when two parts are closer than the profile tool diameter', () => {
+    const tools = makeTools().map((t) => (t.id === 't1' ? { ...t, diameter: 12.7 } : t))
+    const result = generateToolpaths(makeInput([a, b], [placeAt(a, 20, 20), placeAt(b, 420 + 6.35, 20)], { tools }))
+    const close = result.warnings.filter((w) => w.code === 'cam/parts-too-close')
+    expect(close).toEqual([expect.objectContaining({ level: 'error' })])
+    expect(close[0]?.message).toMatch(/cab_1:a.*cab_1:b.*6\.35 mm.*12\.7 mm/)
+  })
+
+  it('measures diagonal neighbours by their corner distance', () => {
+    // 5 mm apart in X and Y: corner distance 7.07 mm ≥ 6.35 mm tool
+    expect(codes(makeInput([a, b], [placeAt(a, 20, 20), placeAt(b, 425, 325)]))).toEqual([])
+    // 3 mm apart in X and Y: corner distance 4.24 mm < 6.35 mm tool
+    expect(codes(makeInput([a, b], [placeAt(a, 20, 20), placeAt(b, 423, 323)]))).toEqual(['cam/parts-too-close'])
+  })
+
+  it('errors when a through dado overruns into the neighbouring part', () => {
+    const grooved = makePart({ id: 'cab_1:a', length: 400, width: 300, ops: [dado('d', [0, 150], [400, 150], 10, 6)] })
+    const tools = makeTools().map((t) => (t.id === 't2' ? { ...t, diameter: 10 } : t.id === 't1' ? { ...t, diameter: 3 } : t))
+    const placements = [placeAt(grooved, 20, 20), placeAt(b, 424, 20)]
+    const result = generateToolpaths(makeInput([grooved, b], placements, { tools }))
+    expect(result.warnings.filter((w) => w.level === 'error').map((w) => w.code)).toEqual(['cam/cut-reaches-neighbour'])
+    expect(result.warnings.find((w) => w.code === 'cam/cut-reaches-neighbour')?.message).toMatch(/:d .*cab_1:b/)
+    // 5 mm clear is enough for the 5 mm overrun
+    const spaced = generateToolpaths(makeInput([grooved, b], [placements[0] ?? placeAt(grooved, 20, 20), placeAt(b, 425, 20)], { tools }))
+    expect(spaced.warnings).toEqual([])
+  })
+
+  it('does not compare a duplicated placement with itself', () => {
+    expect(codes(makeInput([a], [placeAt(a, 20, 20), placeAt(a, 20, 20)]))).toEqual(['cam/duplicate-placement'])
+  })
+})
+
+describe('generateToolpaths: input handling', () => {
   it('does not mutate its input', () => {
     const side = sidePanel()
     const input = makeInput([side], [placeAt(side, 20, 20)])

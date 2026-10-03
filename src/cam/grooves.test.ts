@@ -96,6 +96,12 @@ describe('planDado', () => {
     expect(plan).toMatchObject({ status: 'manual' })
   })
 
+  it('never grooves with a drill, even when handed one as the dado tool', () => {
+    const drill = ctx.tools.drill
+    const plan = planDado(dado('d1', [100, 0], [100, 300], 6.35, 4), { ...ctx, tools: { ...ctx.tools, dado: drill } })
+    expect(plan).toMatchObject({ status: 'manual', reason: expect.stringMatching(/T3 is a drill/) })
+  })
+
   it('warns when deeper than the flutes', () => {
     const plan = planDado(dado('d1', [100, 0], [100, 300], 4.76, 17), ctx)
     expect(plan.warnings.map((w) => w.code)).toEqual(['cam/flute-length'])

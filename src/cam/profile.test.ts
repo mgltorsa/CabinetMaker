@@ -143,6 +143,14 @@ describe('planProfile edge cases', () => {
     expect(result.warnings).toEqual([expect.objectContaining({ level: 'error', code: 'cam/profile-skipped' })])
   })
 
+  it('never profiles with a drill, even when handed one as the profile tool', () => {
+    const ctx = makeContext(makePart())
+    const result = planProfile({ ...ctx, tools: { ...ctx.tools, profile: ctx.tools.drill } })
+    expect(result.toolpath).toBeNull()
+    expect(result.warnings).toEqual([expect.objectContaining({ level: 'error', code: 'cam/profile-skipped' })])
+    expect(result.warnings[0]?.message).toMatch(/T3 is a drill/)
+  })
+
   it('warns when the profile is deeper than the flutes', () => {
     const tools = makeTools().map((t) => (t.id === 't1' ? { ...t, fluteLength: 12 } : t))
     const result = planProfile(makeContext(makePart(), { tools }))

@@ -102,8 +102,9 @@ function sidePoints(side: Side, windows: readonly Window[], z: Mm, tabZ: Mm | nu
 
 export function planProfile(ctx: PartContext): ProfilePlan {
   const tool = ctx.tools.profile
-  if (!tool) {
-    const message = `Part ${ctx.part.id} is not profiled: no usable profile tool`
+  // `resolveTools` already rejects drills; re-checked so a hand-built CamTools cannot profile with one.
+  if (!tool || tool.kind === 'drill') {
+    const message = `Part ${ctx.part.id} is not profiled: no usable profile tool${tool ? ` (T${tool.number} is a drill)` : ''}`
     return { toolpath: null, warnings: [partWarning(ctx, 'error', 'cam/profile-skipped', message)] }
   }
   const tabs = tabPlan(ctx)

@@ -5,30 +5,19 @@ import { partWarning, type PartContext } from './context'
 import { formatForMessage as fmt } from './format'
 import type { PlannedToolpath } from './types'
 
+/** Error when the tool's flutes are shorter than the cut depth. */
+export function fluteLengthWarnings(ctx: PartContext, op: Op, depth: Mm, tool: Tool): BuildWarning[] {
+  if (!(depth > tool.fluteLength)) return []
+  const message = `Op ${op.id} is ${fmt(depth)} mm deep but T${tool.number} flutes are ${fmt(tool.fluteLength)} mm long`
+  return [partWarning(ctx, 'error', 'cam/flute-length', message)]
+}
+
 /** Flute-length and stock-depth warnings for an op cut to `depth`. */
 export function opDepthWarnings(ctx: PartContext, op: Op, depth: Mm, tool: Tool): BuildWarning[] {
-  const warnings: BuildWarning[] = []
-  if (depth > tool.fluteLength) {
-    warnings.push(
-      partWarning(
-        ctx,
-        'error',
-        'cam/flute-length',
-        `Op ${op.id} is ${fmt(depth)} mm deep but T${tool.number} flutes are ${fmt(tool.fluteLength)} mm long`,
-      ),
-    )
-  }
-  if (depth > ctx.stockThickness) {
-    warnings.push(
-      partWarning(
-        ctx,
-        'error',
-        'cam/deeper-than-stock',
-        `Op ${op.id} is ${fmt(depth)} mm deep, deeper than the ${fmt(ctx.stockThickness)} mm stock`,
-      ),
-    )
-  }
-  return warnings
+  const flutes = fluteLengthWarnings(ctx, op, depth, tool)
+  if (!(depth > ctx.stockThickness)) return flutes
+  const message = `Op ${op.id} is ${fmt(depth)} mm deep, deeper than the ${fmt(ctx.stockThickness)} mm stock`
+  return [...flutes, partWarning(ctx, 'error', 'cam/deeper-than-stock', message)]
 }
 
 interface Extent {
