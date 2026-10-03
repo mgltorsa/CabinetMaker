@@ -1,8 +1,8 @@
 'use client'
 
 import { Edges, Html, Line, OrbitControls } from '@react-three/drei'
-import { Canvas, type ThreeEvent } from '@react-three/fiber'
-import { type RefObject, useLayoutEffect, useMemo, useRef } from 'react'
+import { Canvas, type ThreeEvent, useThree } from '@react-three/fiber'
+import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { CanvasTexture, type InstancedMesh, Object3D, Quaternion, RepeatWrapping, SRGBColorSpace, Vector3 } from 'three'
 import type { DimensionSpec, Finish, MeshSpec, PinHoleSpec, PullSpec, SceneSpec } from '../lib/scene'
 
@@ -184,19 +184,51 @@ function Dimension({ dim, portal }: { dim: DimensionSpec; portal: RefObject<HTML
   )
 }
 
+type OrbitLike = { target: Vector3; update: () => void }
+
+function cameraOffset(size: number): [number, number, number] {
+  const d = Math.max(size, 0.6) * CAMERA_DISTANCE
+  return [d * 0.55, d * 0.38, d * 0.92]
+}
+
+/**
+ * Frames the selected cabinet whenever the selection changes (not on every
+ * edit, so the user's orbit survives typing a new width).
+ */
+function CameraRig({ focus, focusKey }: { focus: SceneSpec['focus']; focusKey: string }) {
+  const camera = useThree((s) => s.camera)
+  const controls = useThree((s) => s.controls) as unknown as OrbitLike | null
+  const latest = useRef(focus)
+  // Keep the latest focus without re-running the framing effect on every edit.
+  useLayoutEffect(() => {
+    latest.current = focus
+  }, [focus])
+  useEffect(() => {
+    if (!controls) return
+    const [tx, ty, tz] = latest.current.target
+    const [ox, oy, oz] = cameraOffset(latest.current.size)
+    camera.position.set(tx + ox, ty + oy, tz + oz)
+    controls.target.set(tx, ty, tz)
+    controls.update()
+  }, [focusKey, controls, camera])
+  return null
+}
+
 export type Viewer3DProps = {
   scene: SceneSpec
+  /** Changes when the camera should re-frame (e.g. the selected cabinet id). */
+  focusKey: string
   hoveredPartId: string | null
   onHover: (partId: string | null) => void
   onPick: (cabinetId: string) => void
 }
 
 /** WebGL view; loaded client-side only (see ThreeView). */
-export default function Viewer3D({ scene, hoveredPartId, onHover, onPick }: Viewer3DProps) {
-  const d = Math.max(scene.extent, 0.6) * CAMERA_DISTANCE
+export default function Viewer3D({ scene, focusKey, hoveredPartId, onHover, onPick }: Viewer3DProps) {
   const floorSize = Math.max(8, Math.ceil(scene.extent * 6))
   const floorTexture = useFloorTexture(floorSize / 1.6)
-  const [tx, ty, tz] = scene.target
+  const [tx, ty, tz] = scene.focus.target
+  const [ox, oy, oz] = cameraOffset(scene.focus.size)
   const shadowSpan = Math.max(2, scene.extent * 1.5)
   // Labels portal into a layer we own: drei's default target is the canvas
   // wrapper, which React also manages (unmounts then fail with removeChild).
@@ -207,7 +239,7 @@ export default function Viewer3D({ scene, hoveredPartId, onHover, onPick }: View
       <Canvas
         shadows
         flat
-        camera={{ position: [tx + d * 0.55, ty + d * 0.38, tz + d * 0.92], fov: 36, near: 0.01, far: 200 }}
+        camera={{ position: [tx + ox, ty + oy, tz + oz], fov: 36, near: 0.01, far: 200 }}
         dpr={[1, 2]}
         onPointerMissed={() => onHover(null)}
       >
@@ -246,7 +278,8 @@ export default function Viewer3D({ scene, hoveredPartId, onHover, onPick }: View
         {scene.dimensions.map((dim) => (
           <Dimension key={dim.id} dim={dim} portal={overlay} />
         ))}
-        <OrbitControls makeDefault target={[tx, ty, tz]} maxPolarAngle={Math.PI / 2 - 0.02} minDistance={0.3} maxDistance={40} enableDamping />
+        <OrbitControls makeDefault maxPolarAngle={Math.PI / 2 - 0.02} minDistance={0.3} maxDistance={40} enableDamping />
+        <CameraRig focus={scene.focus} focusKey={focusKey} />
       </Canvas>
       <div ref={overlay} className="pointer-events-none absolute inset-0 overflow-hidden" />
     </div>

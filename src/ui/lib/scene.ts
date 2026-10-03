@@ -91,6 +91,8 @@ export interface SceneSpec {
   extent: number
   /** Look-at target, metres. */
   target: Vec3Tuple
+  /** Where the camera should frame: the selected cabinet (or the whole run). */
+  focus: { target: Vec3Tuple; size: number }
 }
 
 export interface SceneOptions {
@@ -212,7 +214,7 @@ export function buildScene(build: ProjectBuild, cabinets: readonly Cabinet[], vi
     return top ? [top] : []
   })
   const visible = [...build.parts, ...supplied].filter((p) => isPartVisible(p, view))
-  if (visible.length === 0) return { meshes: [], pulls: [], pinHoles: [], dimensions: [], extent: 1, target: [0, 0.4, 0] }
+  if (visible.length === 0) return { meshes: [], pulls: [], pinHoles: [], dimensions: [], extent: 1, target: [0, 0.4, 0], focus: { target: [0, 0.4, 0], size: 1 } }
 
   // World (mm) before centring: cabinet space + run offset.
   const toWorld = (part: Part, p: V): V => ({ x: p.x + (offsets.get(part.cabinetId) ?? 0), y: p.y, z: p.z })
@@ -278,7 +280,19 @@ export function buildScene(build: ProjectBuild, cabinets: readonly Cabinet[], vi
 
   const dimensions = view.dimensions ? cabinetDimensions(build, cabinets, offsets, options, m) : []
   const extent = Math.max(maxX - minX, maxY, maxZ) / MM_PER_M
-  return { meshes, pulls, pinHoles, dimensions, extent, target: [0, maxY / 2 / MM_PER_M, maxZ / 2 / MM_PER_M] }
+  const target: Vec3Tuple = [0, maxY / 2 / MM_PER_M, maxZ / 2 / MM_PER_M]
+  const selected = cabinetById.get(options.selectedCabinetId ?? '')
+  const focus = selected
+    ? {
+        target: m({
+          x: (offsets.get(selected.id) ?? 0) + selected.width / 2,
+          y: selected.floorHeight + selected.height / 2,
+          z: selected.depth / 2,
+        }),
+        size: Math.max(selected.width, selected.height, selected.depth) / MM_PER_M,
+      }
+    : { target, size: extent }
+  return { meshes, pulls, pinHoles, dimensions, extent, target, focus }
 }
 
 /** Overall W / H / D of the selected cabinet: width over the top front edge, height and depth at the right. */

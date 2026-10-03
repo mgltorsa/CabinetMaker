@@ -31,11 +31,21 @@ export const VISIBILITY_TOGGLES: { key: ViewToggle; label: string }[] = [
 function VisibilityPills() {
   const view = useDesigner((s) => s.view)
   const setViewToggle = useDesigner((s) => s.setViewToggle)
+  // Small screens: the pills fold behind their heading so they do not cover the model.
+  const [isOpenOnSmall, setIsOpenOnSmall] = useState(false)
   return (
     <div role="group" aria-labelledby="visibility-heading" className="pointer-events-auto flex w-fit flex-col gap-1.5">
-      <p id="visibility-heading" className="font-mono text-[11px] tracking-wider text-muted-foreground uppercase">
+      <p id="visibility-heading" className="font-mono text-[11px] tracking-wider text-muted-foreground uppercase max-md:hidden">
         Toggle visibility
       </p>
+      <button
+        type="button"
+        aria-expanded={isOpenOnSmall}
+        onClick={() => setIsOpenOnSmall((v) => !v)}
+        className="w-fit rounded-md border bg-background/90 px-2.5 py-1 font-mono text-[11px] tracking-wider uppercase shadow-xs md:hidden"
+      >
+        Toggle visibility {isOpenOnSmall ? '▴' : '▾'}
+      </button>
       {VISIBILITY_TOGGLES.map((t) => {
         const isOn = view[t.key]
         return (
@@ -46,6 +56,7 @@ function VisibilityPills() {
             onClick={() => setViewToggle(t.key, !isOn)}
             className={cn(
               'flex h-7 items-center gap-2 rounded-md border px-2.5 text-left text-[13px] shadow-xs transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              !isOpenOnSmall && 'max-md:hidden',
               isOn ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90' : 'border-border bg-background/85 text-muted-foreground hover:bg-background',
             )}
           >
@@ -85,7 +96,7 @@ export function ThreeView({ project, result }: ThreeViewProps) {
         <p className="grid h-full place-items-center text-sm text-muted-foreground">Nothing to show. Add a cabinet or turn parts back on.</p>
       ) : (
         <ErrorBoundary title="The 3D view could not start (WebGL may be unavailable).">
-          <Viewer3D scene={scene} hoveredPartId={hoveredPartId} onHover={setHoveredPartId} onPick={selectCabinet} />
+          <Viewer3D scene={scene} focusKey={selectedCabinetId ?? ''} hoveredPartId={hoveredPartId} onHover={setHoveredPartId} onPick={selectCabinet} />
         </ErrorBoundary>
       )}
       <div className="pointer-events-none absolute top-14 left-3">

@@ -210,3 +210,18 @@ describe('3D supplied countertop', () => {
     expect(buildScene(build, project.cabinets, { ...DEFAULT_VIEW, top: false }, opts).meshes.some((m) => m.finish === 'top')).toBe(false)
   })
 })
+
+describe('3D camera focus', () => {
+  it('frames the selected cabinet, not the whole run', () => {
+    const project = fixtureProject()
+    const base = project.cabinets[0]!
+    project.cabinets = [base, { ...base, id: 'cab_2', width: 900 }]
+    const build = buildProject(project)
+    const scene = buildScene(build, project.cabinets, DEFAULT_VIEW, { units: 'metric', selectedCabinetId: 'cab_2' })
+    const offsets = runOffsets(project.cabinets)
+    const runWidth = (offsets.get('cab_2')! + 900) / 1000
+    // cab_2 centre in centred run coordinates.
+    expect(scene.focus.target[0]).toBeCloseTo((offsets.get('cab_2')! + 450) / 1000 - runWidth / 2, 2)
+    expect(scene.focus.size).toBeCloseTo(0.9, 6)
+  })
+})
