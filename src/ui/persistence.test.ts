@@ -187,7 +187,7 @@ describe('attachAutosave', () => {
   it('does not save for UI-only changes', () => {
     const storage = new MemoryStorage()
     const { store } = wire(storage)
-    store.getState().setViewToggle('open', true)
+    store.getState().setViewToggle('doorsOpen', true)
     vi.advanceTimersByTime(1000)
     expect(storage.writes).toBe(0)
   })

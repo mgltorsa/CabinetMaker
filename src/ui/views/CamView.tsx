@@ -1,12 +1,16 @@
 'use client'
 
+import { DownloadIcon, ShieldAlertIcon } from 'lucide-react'
 import { useId, useMemo, useState } from 'react'
 import { generateToolpaths } from '@/cam'
 import type { CamResult, Project, Sheet } from '@/core/types'
 import type { PipelineResult } from '@/pipeline'
 import { CamWarnings, ExportProblems } from '../cam/CamNotices'
-import { MachineSettings } from '../cam/MachineSettings'
 import { ToolpathPreview } from '../cam/ToolpathPreview'
+import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
+import { Button } from '../components/ui/button'
+import { Label } from '../components/ui/label'
+import { NativeSelect } from '../components/ui/native-select'
 import { downloadBlob } from '../lib/download'
 import { exportGcode, type ExportProblem } from '../lib/gcodeExport'
 import { sheetLabel } from '../lib/sheets'
@@ -60,47 +64,48 @@ export function CamView({ project, result }: CamViewProps) {
   }
 
   return (
-    <div className="cam-view view-pad">
-      <aside className="callout danger" aria-label="CNC safety warning">
-        <strong>Preview only.</strong> Generated G-code has not been proven on your machine. Simulate every file and check tool, feeds, zero and hold-down
-        before cycle start.
-      </aside>
+    <div className="flex flex-col gap-4 p-6">
+      <Alert variant="destructive" role="complementary" aria-label="CNC safety warning">
+        <ShieldAlertIcon />
+        <AlertTitle>Preview only</AlertTitle>
+        <AlertDescription>Generated G-code has not been proven on your machine. Simulate every file and check tool, feeds, zero and hold-down before cycle start.</AlertDescription>
+      </Alert>
 
       {!sheet ? (
-        <p className="empty">No nested sheets yet, so there is nothing to machine. See the Cut plan tab.</p>
+        <p className="text-sm text-muted-foreground">No nested sheets yet, so there is nothing to machine. See 03 Drawings & BOM → Cut plan.</p>
       ) : (
         <>
-          <div className="cam-toolbar">
-            <div className="field">
-              <label htmlFor={pickerId}>Sheet</label>
-              <select id={pickerId} value={index} onChange={(e) => setChosen(Number(e.target.value))}>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="flex min-w-72 flex-col gap-1.5">
+              <Label htmlFor={pickerId}>Sheet</Label>
+              <NativeSelect id={pickerId} value={index} onChange={(e) => setChosen(Number(e.target.value))}>
                 {sheets.map((s, i) => (
                   <option key={s.id} value={i}>
                     {sheetLabel(project, s)}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
-            <button type="button" onClick={() => handleDownload([sheet])}>
-              Download {sheet.id} (.nc)
-            </button>
-            <button type="button" className="secondary" onClick={() => handleDownload(sheets)}>
+            <Button size="sm" onClick={() => handleDownload([sheet])}>
+              <DownloadIcon /> Download {sheet.id} (.nc)
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleDownload(sheets)}>
               Download all sheets ({sheets.length} files)
-            </button>
+            </Button>
           </div>
 
           {problems && <ExportProblems problems={problems} onDismiss={() => setBlocked(null)} />}
 
           {outcome && !outcome.ok && (
-            <div className="view-error" role="alert">
-              <strong>Toolpath generation failed</strong>
-              <p>{outcome.error}</p>
-            </div>
+            <Alert variant="destructive">
+              <AlertTitle>Toolpath generation failed</AlertTitle>
+              <AlertDescription>{outcome.error}</AlertDescription>
+            </Alert>
           )}
 
           {outcome?.ok && (
             <>
-              {outcome.cam.toolpaths.length === 0 && <p className="empty">No toolpaths for this sheet yet.</p>}
+              {outcome.cam.toolpaths.length === 0 && <p className="text-sm text-muted-foreground">No toolpaths for this sheet yet.</p>}
               <ToolpathPreview
                 sheet={sheet}
                 toolpaths={outcome.cam.toolpaths}
@@ -109,14 +114,14 @@ export function CamView({ project, result }: CamViewProps) {
                 title={`Toolpaths for ${sheetLabel(project, sheet)}`}
               />
               <CamWarnings warnings={outcome.cam.warnings} />
-              <section aria-labelledby="manual-ops-heading">
-                <h3 id="manual-ops-heading" className="view-title">
+              <section aria-labelledby="manual-ops-heading" className="flex flex-col gap-1.5">
+                <h2 id="manual-ops-heading" className="font-mono text-sm font-semibold">
                   Manual operations ({outcome.cam.manualOps.length})
-                </h3>
+                </h2>
                 {outcome.cam.manualOps.length === 0 ? (
-                  <p className="hint">Everything on this sheet can be machined from face A.</p>
+                  <p className="text-sm text-muted-foreground">Everything on this sheet can be machined from face A.</p>
                 ) : (
-                  <ul className="plain-list">
+                  <ul className="list-disc pl-5 text-sm">
                     {outcome.cam.manualOps.map((op) => (
                       <li key={`${op.partId}:${op.opId}`}>
                         <strong>{partName(op.partId)}</strong> — {op.opId}: {op.reason}
@@ -129,8 +134,6 @@ export function CamView({ project, result }: CamViewProps) {
           )}
         </>
       )}
-
-      <MachineSettings machine={project.machine} tools={project.tools} units={project.units} />
     </div>
   )
 }

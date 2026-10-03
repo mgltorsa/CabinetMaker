@@ -1,29 +1,27 @@
 'use client'
 
-import type { NestSettings, Project, UnitSystem } from '@/core/types'
+import type { Project } from '@/core/types'
 import { sheetLayout } from '@/drawings'
 import type { PipelineResult } from '@/pipeline'
 import { DrawingView } from '../components/DrawingView'
-import { CheckboxField, FieldGroup, LengthInput } from '../components/fields'
+import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { lengthLabel, materialName, percent } from '../lib/format'
 import { overallYield, sheetLabel } from '../lib/sheets'
-import { useDesigner } from '../store'
-
-function NestSettingsForm({ settings, units }: { settings: NestSettings; units: UnitSystem }) {
-  const update = useDesigner((s) => s.updateNest)
-  return (
-    <FieldGroup title="Nest settings">
-      <LengthInput label="Kerf" value={settings.kerf} units={units} onCommit={(kerf) => update({ kerf })} />
-      <LengthInput label="Edge trim" value={settings.edgeTrim} units={units} onCommit={(edgeTrim) => update({ edgeTrim })} />
-      <LengthInput label="Extra part spacing" value={settings.partSpacing} units={units} onCommit={(partSpacing) => update({ partSpacing })} />
-      <CheckboxField label="Ignore grain (allow any rotation)" isChecked={settings.ignoreGrain} onChange={(ignoreGrain) => update({ ignoreGrain })} />
-    </FieldGroup>
-  )
-}
 
 type CutPlanViewProps = {
   project: Project
   result: PipelineResult
+}
+
+function Stat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-md border bg-background px-4 py-3">
+      <dt className="font-mono text-[11px] tracking-wider text-muted-foreground uppercase">{label}</dt>
+      <dd className="font-mono text-2xl font-semibold tabular-nums">{value}</dd>
+    </div>
+  )
 }
 
 export function CutPlanView({ project, result }: CutPlanViewProps) {
@@ -33,107 +31,97 @@ export function CutPlanView({ project, result }: CutPlanViewProps) {
   const placedCount = nest.sheets.reduce((n, s) => n + s.placements.length, 0)
 
   return (
-    <div className="cut-plan view-pad">
-      <section aria-labelledby="nest-summary-heading">
-        <h3 id="nest-summary-heading" className="view-title">
+    <div className="flex flex-col gap-6 p-6">
+      <section aria-labelledby="nest-summary-heading" className="flex flex-col gap-3">
+        <h2 id="nest-summary-heading" className="font-mono text-sm font-semibold">
           Summary
-        </h3>
-        <dl className="stats">
-          <div>
-            <dt>Sheets</dt>
-            <dd>{nest.sheets.length}</dd>
-          </div>
-          <div>
-            <dt>Parts placed</dt>
-            <dd>{placedCount}</dd>
-          </div>
-          <div>
-            <dt>Yield</dt>
-            <dd>{percent(overallYield(nest.sheets))}</dd>
-          </div>
-          <div>
-            <dt>Unplaced</dt>
-            <dd>{nest.unplaced.length}</dd>
-          </div>
+        </h2>
+        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="Sheets" value={nest.sheets.length} />
+          <Stat label="Parts placed" value={placedCount} />
+          <Stat label="Yield" value={percent(overallYield(nest.sheets))} />
+          <Stat label="Unplaced" value={nest.unplaced.length} />
         </dl>
         {nest.summary.length > 0 && (
-          <div className="table-wrap">
-            <table className="data-table">
-              <caption>By material</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Material</th>
-                  <th scope="col" className="num">Sheets</th>
-                  <th scope="col" className="num">Parts</th>
-                  <th scope="col" className="num">Yield</th>
-                </tr>
-              </thead>
-              <tbody>
+          <div className="rounded-md border bg-background">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Material</TableHead>
+                  <TableHead scope="col" className="text-right">Sheets</TableHead>
+                  <TableHead scope="col" className="text-right">Parts</TableHead>
+                  <TableHead scope="col" className="text-right">Yield</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {nest.summary.map((m) => (
-                  <tr key={m.materialId}>
-                    <th scope="row">{materialName(project, m.materialId)}</th>
-                    <td className="num">{m.sheetCount}</td>
-                    <td className="num">{m.partCount}</td>
-                    <td className="num">{percent(m.yield)}</td>
-                  </tr>
+                  <TableRow key={m.materialId}>
+                    <TableCell>{materialName(project, m.materialId)}</TableCell>
+                    <TableCell className="text-right font-mono">{m.sheetCount}</TableCell>
+                    <TableCell className="text-right font-mono">{m.partCount}</TableCell>
+                    <TableCell className="text-right font-mono">{percent(m.yield)}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
-        <p className="hint">Layouts use a MaxRects heuristic with kerf and grain rules. They are good, not provably optimal.</p>
-        <NestSettingsForm settings={project.nest} units={units} />
       </section>
 
       {nest.unplaced.length > 0 && (
-        <section className="callout warn" aria-labelledby="unplaced-heading">
-          <h3 id="unplaced-heading">Unplaced parts ({nest.unplaced.length})</h3>
-          <ul>
-            {nest.unplaced.map((u) => (
-              <li key={u.partId}>
-                <strong>{partName(u.partId)}</strong>: {u.reason}
-              </li>
-            ))}
-          </ul>
-        </section>
+        <Alert variant="warning">
+          <AlertTitle>Unplaced parts ({nest.unplaced.length})</AlertTitle>
+          <AlertDescription>
+            <ul className="list-disc pl-4">
+              {nest.unplaced.map((u) => (
+                <li key={u.partId}>
+                  <strong>{partName(u.partId)}</strong>: {u.reason}
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
       )}
 
       {nest.linearPartIds.length > 0 && (
-        <section aria-labelledby="linear-heading">
-          <h3 id="linear-heading" className="view-title">
+        <section aria-labelledby="linear-heading" className="flex flex-col gap-2">
+          <h2 id="linear-heading" className="font-mono text-sm font-semibold">
             Linear stock (not nested)
-          </h3>
-          <ul className="plain-list">
-            {nest.linearPartIds.map((id) => (
-              <li key={id}>{partName(id)}</li>
-            ))}
-          </ul>
+          </h2>
+          <p className="text-sm text-muted-foreground">{nest.linearPartIds.map(partName).join(', ')}</p>
         </section>
       )}
 
       {nest.sheets.length === 0 ? (
-        <p className="empty">No sheets nested yet.</p>
+        <p className="text-sm text-muted-foreground">No sheets nested yet.</p>
       ) : (
-        nest.sheets.map((sheet, i) => (
-          <section key={sheet.id} className="sheet-card" aria-labelledby={`sheet-${i}-heading`}>
-            <h3 id={`sheet-${i}-heading`} className="view-title">
-              {sheetLabel(project, sheet)}
-            </h3>
-            <p className="hint">
-              {lengthLabel(sheet.length, units)} × {lengthLabel(sheet.width, units)} · {sheet.placements.length} parts · yield {percent(sheet.yield)}
-            </p>
-            <DrawingView
-              make={() => {
-                const material = project.materials.find((m) => m.id === sheet.materialId)
-                return sheetLayout(sheet, partsById, units, {
-                  edgeTrim: (result.nestSettings ?? project.nest).edgeTrim,
-                  materialName: materialName(project, sheet.materialId),
-                  grained: material?.kind === 'sheet' ? material.grained : undefined,
-                })
-              }}
-              units={units} label={`Layout of ${sheetLabel(project, sheet)}`} />
-          </section>
-        ))
+        <div className="grid gap-4 xl:grid-cols-2">
+          {nest.sheets.map((sheet) => (
+            <Card key={sheet.id} className="bg-background">
+              <CardHeader>
+                <CardTitle>{sheetLabel(project, sheet)}</CardTitle>
+                <CardDescription>
+                  {lengthLabel(sheet.length, units)} × {lengthLabel(sheet.width, units)} · {sheet.placements.length} parts · yield {percent(sheet.yield)}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DrawingView
+                  className="border-0 p-0 shadow-none"
+                  make={() => {
+                    const material = project.materials.find((m) => m.id === sheet.materialId)
+                    return sheetLayout(sheet, partsById, units, {
+                      edgeTrim: (result.nestSettings ?? project.nest).edgeTrim,
+                      materialName: materialName(project, sheet.materialId),
+                      grained: material?.kind === 'sheet' ? material.grained : undefined,
+                    })
+                  }}
+                  units={units}
+                  label={`Layout of ${sheetLabel(project, sheet)}`}
+                />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       )}
     </div>
   )

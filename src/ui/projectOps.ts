@@ -199,3 +199,27 @@ export function updateEstimate(project: Project, patch: Partial<Omit<EstimateSet
 export function updateLabor(project: Project, patch: Partial<EstimateSettings['labor']>): Project {
   return { ...project, estimate: { ...project.estimate, labor: { ...project.estimate.labor, ...patch } } }
 }
+
+// ─── Quick edits (simple sidebar cards) ─────────────────────────────────────
+
+/**
+ * Set the number of drawers in a section. New drawers go right after the last
+ * existing drawer (or at the top); removing takes the lowest drawers first. A
+ * section never ends up empty: removing its only bays leaves one open bay.
+ */
+export function setDrawerCount(project: Project, cabinetId: Id, sectionId: Id, count: number): Project {
+  return mapSection(project, cabinetId, sectionId, (s) => {
+    const drawers = s.bays.filter((b) => b.kind === 'drawer')
+    const target = Math.max(0, Math.min(Math.floor(count), MAX_BAYS - (s.bays.length - drawers.length)))
+    if (target === drawers.length) return s
+    if (target > drawers.length) {
+      const lastDrawer = s.bays.map((b) => b.kind).lastIndexOf('drawer')
+      const added = Array.from({ length: target - drawers.length }, () => newBay('drawer'))
+      const at = lastDrawer + 1
+      return { ...s, bays: [...s.bays.slice(0, at), ...added, ...s.bays.slice(at)] }
+    }
+    const remove = new Set(drawers.slice(target).map((b) => b.id))
+    const bays = s.bays.filter((b) => !remove.has(b.id))
+    return { ...s, bays: bays.length > 0 ? bays : [newBay('open', null, 1)] }
+  })
+}

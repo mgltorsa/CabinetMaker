@@ -13,16 +13,16 @@ type ElevationViewProps = {
 }
 
 export function ElevationView({ kind, cabinet, result, units }: ElevationViewProps) {
-  if (!cabinet) return <p className="empty">Select a cabinet to see its {kind} elevation.</p>
+  if (!cabinet) return <p className="p-6 text-sm text-muted-foreground">Select a cabinet to see its {kind} elevation.</p>
   const build = result.build.cabinets.find((b) => b.cabinetId === cabinet.id)
-  if (!build) return <p className="empty">No build output for “{cabinet.name}”. Check the warnings below.</p>
+  if (!build) return <p className="p-6 text-sm text-muted-foreground">No build output for “{cabinet.name}”. Check the warnings.</p>
   const make = kind === 'front' ? () => frontElevation(cabinet, build, units) : () => sideElevation(cabinet, build, units)
   return (
-    <div className="view-pad">
-      <h3 className="view-title">
-        {cabinet.name} — {kind} elevation
-      </h3>
-      <DrawingView make={make} units={units} label={`${cabinet.name} ${kind} elevation`} />
+    <div className="flex h-full flex-col gap-3 p-6">
+      <h2 className="font-mono text-sm text-muted-foreground">
+        {cabinet.name} — {kind === 'front' ? 'front elevation' : 'side section'}
+      </h2>
+      <DrawingView make={make} units={units} label={`${cabinet.name} ${kind} elevation`} className="mx-auto w-full max-w-3xl" />
     </div>
   )
 }

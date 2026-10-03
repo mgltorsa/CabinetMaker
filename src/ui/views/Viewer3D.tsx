@@ -1,13 +1,68 @@
 'use client'
 
-import { Edges, OrbitControls } from '@react-three/drei'
+import { Edges, Html, Line, OrbitControls } from '@react-three/drei'
 import { Canvas, type ThreeEvent } from '@react-three/fiber'
-import type { MeshSpec, SceneSpec } from '../lib/scene'
+import { type RefObject, useLayoutEffect, useMemo, useRef } from 'react'
+import { CanvasTexture, type InstancedMesh, Object3D, Quaternion, RepeatWrapping, SRGBColorSpace, Vector3 } from 'three'
+import type { DimensionSpec, Finish, MeshSpec, PinHoleSpec, PullSpec, SceneSpec } from '../lib/scene'
 
-const EDGE_COLOR = '#3a3128'
-const HOVER_COLOR = '#f0a640'
 /** Camera distance as a multiple of the scene's largest extent. */
-const CAMERA_DISTANCE = 2.2
+const CAMERA_DISTANCE = 3.1
+const DIMENSION_COLOR = '#2f4a6b'
+const HOVER_EMISSIVE = '#f0a640'
+
+const FINISHES: Record<Finish, { color: string; roughness: number }> = {
+  carcass: { color: '#f3f0ea', roughness: 0.55 },
+  front: { color: '#efebe4', roughness: 0.45 },
+  back: { color: '#5a5651', roughness: 0.85 },
+  'drawer-box': { color: '#e3cea2', roughness: 0.7 },
+  'toe-kick': { color: '#ddd7cd', roughness: 0.7 },
+  top: { color: '#ece8e1', roughness: 0.35 },
+  'face-frame': { color: '#dcc59f', roughness: 0.6 },
+}
+
+/** Deterministic plank texture for the floor (no network assets in a static export). */
+function useFloorTexture(repeat: number): CanvasTexture | null {
+  return useMemo(() => {
+    if (typeof document === 'undefined') return null
+    const size = 512
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+    let seed = 7
+    const rand = (): number => {
+      seed = (seed * 16807) % 2147483647
+      return seed / 2147483647
+    }
+    const plank = size / 8
+    for (let row = 0; row < 8; row++) {
+      const shade = 196 + Math.floor(rand() * 18)
+      ctx.fillStyle = `rgb(${shade + 8}, ${shade - 18}, ${shade - 62})`
+      ctx.fillRect(0, row * plank, size, plank)
+      for (let g = 0; g < 14; g++) {
+        ctx.strokeStyle = `rgba(120, 85, 45, ${0.05 + rand() * 0.07})`
+        ctx.lineWidth = 1
+        const y = row * plank + rand() * plank
+        ctx.beginPath()
+        ctx.moveTo(0, y)
+        ctx.bezierCurveTo(size * 0.3, y + rand() * 4 - 2, size * 0.7, y + rand() * 4 - 2, size, y)
+        ctx.stroke()
+      }
+      ctx.fillStyle = 'rgba(90, 62, 30, 0.35)'
+      ctx.fillRect(0, row * plank, size, 1.5)
+      const joint = rand() * size
+      ctx.fillRect(joint, row * plank, 1.5, plank)
+    }
+    const texture = new CanvasTexture(canvas)
+    texture.wrapS = RepeatWrapping
+    texture.wrapT = RepeatWrapping
+    texture.repeat.set(repeat, repeat)
+    texture.colorSpace = SRGBColorSpace
+    return texture
+  }, [repeat])
+}
 
 type PartMeshProps = {
   mesh: MeshSpec
@@ -17,6 +72,7 @@ type PartMeshProps = {
 }
 
 function PartMesh({ mesh, isHovered, onHover, onPick }: PartMeshProps) {
+  const finish = FINISHES[mesh.finish]
   const handleOver = (e: ThreeEvent<PointerEvent>): void => {
     e.stopPropagation()
     onHover(mesh.partId)
@@ -30,11 +86,101 @@ function PartMesh({ mesh, isHovered, onHover, onPick }: PartMeshProps) {
     onPick(mesh.cabinetId)
   }
   return (
-    <mesh position={mesh.position} onPointerOver={handleOver} onPointerOut={handleOut} onClick={handleClick}>
+    <mesh
+      position={mesh.position}
+      rotation={[0, mesh.rotationY, 0]}
+      castShadow
+      receiveShadow
+      onPointerOver={handleOver}
+      onPointerOut={handleOut}
+      onClick={handleClick}
+    >
       <boxGeometry args={mesh.size} />
-      <meshStandardMaterial color={isHovered ? HOVER_COLOR : mesh.color} roughness={0.85} metalness={0} />
-      <Edges color={EDGE_COLOR} />
+      <meshStandardMaterial color={finish.color} roughness={finish.roughness} metalness={0} emissive={HOVER_EMISSIVE} emissiveIntensity={isHovered ? 0.28 : 0} />
+      <Edges color="#000000" opacity={0.16} transparent threshold={20} />
     </mesh>
+  )
+}
+
+const UP = new Vector3(0, 1, 0)
+
+/** Bar pull: a rod between the two holes, held off the face by two posts. */
+function Pull({ pull }: { pull: PullSpec }) {
+  const { rod, posts } = useMemo(() => {
+    const a = new Vector3(...pull.a)
+    const b = new Vector3(...pull.b)
+    const n = new Vector3(...pull.normal).normalize()
+    const offA = a.clone().addScaledVector(n, pull.standoff)
+    const offB = b.clone().addScaledVector(n, pull.standoff)
+    const along = offB.clone().sub(offA)
+    const length = along.length()
+    const quat = new Quaternion().setFromUnitVectors(UP, along.clone().normalize())
+    const postQuat = new Quaternion().setFromUnitVectors(UP, n)
+    const mid = (p: Vector3, q: Vector3): Vector3 => p.clone().add(q).multiplyScalar(0.5)
+    return {
+      rod: { position: mid(offA, offB), quaternion: quat, length: length + 0.03 },
+      posts: [
+        { position: mid(a, offA), quaternion: postQuat },
+        { position: mid(b, offB), quaternion: postQuat },
+      ],
+    }
+  }, [pull])
+  return (
+    <group>
+      <mesh position={rod.position} quaternion={rod.quaternion} castShadow>
+        <cylinderGeometry args={[0.006, 0.006, rod.length, 16]} />
+        <meshStandardMaterial color="#c9ccd0" metalness={0.35} roughness={0.3} />
+      </mesh>
+      {posts.map((p, i) => (
+        <mesh key={i} position={p.position} quaternion={p.quaternion} castShadow>
+          <cylinderGeometry args={[0.005, 0.005, pull.standoff, 12]} />
+          <meshStandardMaterial color="#b9bdc2" metalness={0.35} roughness={0.35} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+/** Shelf-pin holes as dark discs, one instanced draw call. */
+function PinHoles({ holes }: { holes: readonly PinHoleSpec[] }) {
+  const ref = useRef<InstancedMesh>(null)
+  useLayoutEffect(() => {
+    const mesh = ref.current
+    if (!mesh) return
+    const o = new Object3D()
+    holes.forEach((h, i) => {
+      const n = new Vector3(...h.normal).normalize()
+      o.position.set(h.position[0] + n.x * 0.0002, h.position[1] + n.y * 0.0002, h.position[2] + n.z * 0.0002)
+      o.quaternion.setFromUnitVectors(UP, n)
+      o.scale.set(h.radius / 0.0025, 1, h.radius / 0.0025)
+      o.updateMatrix()
+      mesh.setMatrixAt(i, o.matrix)
+    })
+    mesh.instanceMatrix.needsUpdate = true
+  }, [holes])
+  if (holes.length === 0) return null
+  return (
+    <instancedMesh ref={ref} args={[undefined, undefined, holes.length]}>
+      <cylinderGeometry args={[0.0025, 0.0025, 0.0004, 12]} />
+      <meshBasicMaterial color="#3b3833" />
+    </instancedMesh>
+  )
+}
+
+function Dimension({ dim, portal }: { dim: DimensionSpec; portal: RefObject<HTMLDivElement | null> }) {
+  const mid: [number, number, number] = [(dim.from[0] + dim.to[0]) / 2, (dim.from[1] + dim.to[1]) / 2, (dim.from[2] + dim.to[2]) / 2]
+  return (
+    <group>
+      <Line points={[dim.from, dim.to]} color={DIMENSION_COLOR} lineWidth={1.4} />
+      {dim.extensions.map(([a, b], i) => (
+        <Line key={i} points={[a, b]} color={DIMENSION_COLOR} lineWidth={0.8} transparent opacity={0.7} />
+      ))}
+      <Html position={mid} center zIndexRange={[20, 0]} portal={portal as RefObject<HTMLElement>}>
+        <span className="pointer-events-none rounded-sm border border-[#2f4a6b]/40 bg-white/95 px-1.5 py-0.5 font-mono text-xs whitespace-nowrap text-[#2f4a6b] shadow-sm">
+          {dim.label}
+        </span>
+      </Html>
+    </group>
   )
 }
 
@@ -47,21 +193,62 @@ export type Viewer3DProps = {
 
 /** WebGL view; loaded client-side only (see ThreeView). */
 export default function Viewer3D({ scene, hoveredPartId, onHover, onPick }: Viewer3DProps) {
-  const d = scene.extent * CAMERA_DISTANCE
+  const d = Math.max(scene.extent, 0.6) * CAMERA_DISTANCE
+  const floorSize = Math.max(8, Math.ceil(scene.extent * 6))
+  const floorTexture = useFloorTexture(floorSize / 1.6)
+  const [tx, ty, tz] = scene.target
+  const shadowSpan = Math.max(2, scene.extent * 1.5)
+  // Labels portal into a layer we own: drei's default target is the canvas
+  // wrapper, which React also manages (unmounts then fail with removeChild).
+  const overlay = useRef<HTMLDivElement>(null)
+
   return (
-    <Canvas
-      camera={{ position: [d * 0.55, scene.centerY + d * 0.45, d], fov: 40, near: 0.01, far: 100 }}
-      dpr={[1, 2]}
-      onPointerMissed={() => onHover(null)}
-    >
-      <ambientLight intensity={0.7} />
-      <directionalLight position={[3, 5, 4]} intensity={1.1} />
-      <directionalLight position={[-4, 2, -3]} intensity={0.35} />
-      {scene.meshes.map((m) => (
-        <PartMesh key={m.partId} mesh={m} isHovered={m.partId === hoveredPartId} onHover={onHover} onPick={onPick} />
-      ))}
-      <gridHelper args={[Math.max(2, Math.ceil(scene.extent * 2)), Math.max(8, Math.ceil(scene.extent * 8)), '#bdb6aa', '#ddd7cc']} />
-      <OrbitControls makeDefault target={[0, scene.centerY, 0]} />
-    </Canvas>
+    <div className="relative h-full w-full">
+      <Canvas
+        shadows
+        flat
+        camera={{ position: [tx + d * 0.55, ty + d * 0.38, tz + d * 0.92], fov: 36, near: 0.01, far: 200 }}
+        dpr={[1, 2]}
+        onPointerMissed={() => onHover(null)}
+      >
+        <color attach="background" args={['#e7e2da']} />
+        <hemisphereLight args={['#fffaf2', '#b89a6e', 0.75]} />
+        <directionalLight
+          position={[tx + 2.2, 4.5, tz + 3.2]}
+          intensity={1.05}
+          castShadow
+          shadow-mapSize={[2048, 2048]}
+          shadow-bias={-0.0004}
+          shadow-camera-left={-shadowSpan}
+          shadow-camera-right={shadowSpan}
+          shadow-camera-top={shadowSpan}
+          shadow-camera-bottom={-shadowSpan}
+        />
+        <directionalLight position={[-3, 2.5, 2]} intensity={0.35} />
+
+        {/* Floor and back wall: the cabinets' backs sit on the wall plane (z = 0). */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, floorSize / 2 - 0.5]} receiveShadow>
+          <planeGeometry args={[floorSize, floorSize]} />
+          <meshStandardMaterial map={floorTexture} color={floorTexture ? '#ffffff' : '#c9ab7c'} roughness={0.8} />
+        </mesh>
+        <mesh position={[0, 1.6, -0.002]} receiveShadow>
+          <planeGeometry args={[floorSize, 3.2]} />
+          <meshStandardMaterial color="#ebe6de" roughness={0.95} />
+        </mesh>
+
+        {scene.meshes.map((m) => (
+          <PartMesh key={m.partId} mesh={m} isHovered={m.partId === hoveredPartId} onHover={onHover} onPick={onPick} />
+        ))}
+        {scene.pulls.map((p) => (
+          <Pull key={p.id} pull={p} />
+        ))}
+        <PinHoles holes={scene.pinHoles} />
+        {scene.dimensions.map((dim) => (
+          <Dimension key={dim.id} dim={dim} portal={overlay} />
+        ))}
+        <OrbitControls makeDefault target={[tx, ty, tz]} maxPolarAngle={Math.PI / 2 - 0.02} minDistance={0.3} maxDistance={40} enableDamping />
+      </Canvas>
+      <div ref={overlay} className="pointer-events-none absolute inset-0 overflow-hidden" />
+    </div>
   )
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import { ChevronRightIcon } from 'lucide-react'
 import { useId, useState, type KeyboardEvent, type ReactNode } from 'react'
 import type { Mm, UnitSystem } from '@/core/types'
 import { formatLength } from '@/core/units'
@@ -12,7 +13,13 @@ import {
   parseOptionalLengthField,
 } from '../lib/fieldParse'
 import { unitSuffix } from '../lib/format'
+import { cn } from '../lib/cn'
 import { MAX_LENGTH } from '../lib/limits'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
+import { Input } from './ui/input'
+import { Label } from './ui/label'
+import { NativeSelect } from './ui/native-select'
+import { Switch } from './ui/switch'
 
 type CommitFieldProps<T> = {
   label: string
@@ -76,15 +83,15 @@ export function CommitField<T>({
   }
 
   return (
-    <div className={`field${className ? ` ${className}` : ''}`}>
-      <label htmlFor={id} className={isLabelHidden ? 'visually-hidden' : undefined}>
+    <div className={cn('flex min-w-0 flex-col gap-1.5', className)}>
+      <Label htmlFor={id} className={isLabelHidden ? 'sr-only' : undefined}>
         {label}
-      </label>
-      <div className="field-input">
-        <input
+      </Label>
+      <div className="relative">
+        <Input
           id={id}
           type="text"
-          className={isFreeText ? 'is-free-text' : undefined}
+          className={cn(!isFreeText && 'font-mono tabular-nums', suffix && 'pr-9')}
           inputMode={inputMode}
           autoComplete="off"
           spellCheck={false}
@@ -97,10 +104,14 @@ export function CommitField<T>({
           onBlur={commit}
           onKeyDown={handleKeyDown}
         />
-        {suffix && <span className="field-suffix" aria-hidden="true">{suffix}</span>}
+        {suffix && (
+          <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 font-mono text-[11px] text-muted-foreground" aria-hidden="true">
+            {suffix}
+          </span>
+        )}
       </div>
       {error && (
-        <p id={errorId} className="field-error" role="alert">
+        <p id={errorId} className="text-xs text-destructive" role="alert">
           {error}
         </p>
       )}
@@ -233,11 +244,11 @@ export function SelectField<T extends string>({ label, value, options, onChange,
     if (match) onChange(match.value)
   }
   return (
-    <div className="field">
-      <label htmlFor={id} className={isLabelHidden ? 'visually-hidden' : undefined}>
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <Label htmlFor={id} className={isLabelHidden ? 'sr-only' : undefined}>
         {label}
-      </label>
-      <select
+      </Label>
+      <NativeSelect
         id={id}
         value={value}
         aria-invalid={error !== undefined}
@@ -249,9 +260,9 @@ export function SelectField<T extends string>({ label, value, options, onChange,
             {o.label}
           </option>
         ))}
-      </select>
+      </NativeSelect>
       {error && (
-        <p id={errorId} className="field-error" role="alert">
+        <p id={errorId} className="text-xs text-destructive" role="alert">
           {error}
         </p>
       )}
@@ -266,11 +277,14 @@ type CheckboxFieldProps = {
 }
 
 export function CheckboxField({ label, isChecked, onChange }: CheckboxFieldProps) {
+  const id = useId()
   return (
-    <label className="checkbox">
-      <input type="checkbox" checked={isChecked} onChange={(e) => onChange(e.target.checked)} />
-      <span>{label}</span>
-    </label>
+    <div className="flex items-center justify-between gap-3 py-1">
+      <Label htmlFor={id} className="text-sm font-normal text-foreground">
+        {label}
+      </Label>
+      <Switch id={id} checked={isChecked} onCheckedChange={onChange} />
+    </div>
   )
 }
 
@@ -278,14 +292,26 @@ type FieldGroupProps = {
   title: string
   children: ReactNode
   isOpen?: boolean
+  description?: string
 }
 
-/** Collapsible group of related fields. */
-export function FieldGroup({ title, children, isOpen = false }: FieldGroupProps) {
+/** Collapsible group of related fields (progressive disclosure for specialist settings). */
+export function FieldGroup({ title, children, isOpen = false, description }: FieldGroupProps) {
   return (
-    <details className="field-group" open={isOpen}>
-      <summary>{title}</summary>
-      <div className="field-grid">{children}</div>
-    </details>
+    <Collapsible defaultOpen={isOpen} className="group/fg rounded-md border bg-background/60">
+      <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2 text-left font-mono text-xs font-medium tracking-wide uppercase outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+        <ChevronRightIcon aria-hidden="true" className="size-3.5 text-muted-foreground transition-transform group-data-[state=open]/fg:rotate-90" />
+        {title}
+        {description && <span className="ml-auto font-sans text-[11px] tracking-normal text-muted-foreground normal-case">{description}</span>}
+      </CollapsibleTrigger>
+      <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
+        <div className="grid grid-cols-2 gap-3 border-t px-3 py-3">{children}</div>
+      </CollapsibleContent>
+    </Collapsible>
   )
+}
+
+/** Two-column grid for fields outside a FieldGroup. */
+export function FieldGrid({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn('grid grid-cols-2 gap-3', className)}>{children}</div>
 }

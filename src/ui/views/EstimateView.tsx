@@ -1,12 +1,11 @@
 'use client'
 
-import type { BomLine, EstimateSettings, Project } from '@/core/types'
+import type { BomLine, Project } from '@/core/types'
 import type { PipelineResult } from '@/pipeline'
-import { CommitField, FieldGroup, NumberInput } from '../components/fields'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Separator } from '../components/ui/separator'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { minutesLabel, money } from '../lib/format'
-import { useDesigner } from '../store'
-
-const MAX_MARGIN_PERCENT = 95
 
 type LineTableProps = {
   caption: string
@@ -16,82 +15,40 @@ type LineTableProps = {
 }
 
 function LineTable({ caption, lines, currency, showSku = false }: LineTableProps) {
-  if (lines.length === 0) return <p className="empty">{caption}: nothing yet.</p>
   return (
-    <div className="table-wrap">
-      <table className="data-table">
-        <caption>{caption}</caption>
-        <thead>
-          <tr>
-            <th scope="col">Item</th>
-            {showSku && <th scope="col">Part number</th>}
-            <th scope="col" className="num">Qty</th>
-            <th scope="col" className="num">Unit cost</th>
-            <th scope="col" className="num">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((l) => (
-            <tr key={`${l.category}:${l.refId}`}>
-              <th scope="row">{l.description}</th>
-              {showSku && <td>{[l.manufacturer, l.sku].filter(Boolean).join(' ') || '—'}</td>}
-              <td className="num">
-                {Number.isInteger(l.qty) ? l.qty : l.qty.toFixed(2)} {l.unit}
-              </td>
-              <td className="num">{money(l.unitCost, currency)}</td>
-              <td className="num">{money(l.total, currency)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-const LABOR_FIELDS: { key: keyof EstimateSettings['labor']; label: string }[] = [
-  { key: 'minutesPerSheet', label: 'Minutes per sheet' },
-  { key: 'minutesPerPart', label: 'Minutes per part' },
-  { key: 'minutesPerJoineryOp', label: 'Minutes per joinery op' },
-  { key: 'minutesPerHole', label: 'Minutes per hole' },
-  { key: 'minutesPerHardwareItem', label: 'Minutes per hardware item' },
-  { key: 'assemblyMinutesPerCabinet', label: 'Assembly minutes per cabinet' },
-]
-
-function EstimateSettingsForm({ settings }: { settings: EstimateSettings }) {
-  const updateEstimate = useDesigner((s) => s.updateEstimate)
-  const updateLabor = useDesigner((s) => s.updateLabor)
-  return (
-    <FieldGroup title="Estimate settings" isOpen>
-      <CommitField<string>
-        label="Currency (ISO code)"
-        value={settings.currency}
-        format={(v) => v}
-        parse={(t) => (/^[A-Za-z]{3}$/.test(t.trim()) ? { ok: true, value: t.trim().toUpperCase() } : { ok: false, error: 'Use a 3-letter code, e.g. USD' })}
-        onCommit={(currency) => updateEstimate({ currency })}
-        inputMode="text"
-        isFreeText
-      />
-      <NumberInput label="Shop rate (per hour)" value={settings.shopRate} min={0} onCommit={(shopRate) => updateEstimate({ shopRate })} />
-      <NumberInput
-        label="Margin"
-        suffix="%"
-        value={Math.round(settings.margin * 1000) / 10}
-        min={0}
-        max={MAX_MARGIN_PERCENT}
-        onCommit={(pct) => updateEstimate({ margin: pct / 100 })}
-      />
-      <NumberInput
-        label="Linear stock waste"
-        suffix="%"
-        value={Math.round(settings.linearWaste * 1000) / 10}
-        min={0}
-        max={100}
-        onCommit={(pct) => updateEstimate({ linearWaste: pct / 100 })}
-      />
-      {LABOR_FIELDS.map((f) => (
-        <NumberInput key={f.key} label={f.label} suffix="min" value={settings.labor[f.key]} min={0} onCommit={(v) => updateLabor({ [f.key]: v })} />
-      ))}
-    </FieldGroup>
+    <Card className="gap-0 bg-background">
+      <CardHeader className="pb-3">
+        <CardTitle>{caption}</CardTitle>
+      </CardHeader>
+      {lines.length === 0 ? (
+        <CardContent className="text-sm text-muted-foreground">Nothing yet.</CardContent>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col" className="pl-4">Item</TableHead>
+              {showSku && <TableHead scope="col">Part number</TableHead>}
+              <TableHead scope="col" className="text-right">Qty</TableHead>
+              <TableHead scope="col" className="text-right">Unit cost</TableHead>
+              <TableHead scope="col" className="pr-4 text-right">Total</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {lines.map((l) => (
+              <TableRow key={`${l.category}:${l.refId}`}>
+                <TableCell className="pl-4 whitespace-normal">{l.description}</TableCell>
+                {showSku && <TableCell className="font-mono text-xs">{[l.manufacturer, l.sku].filter(Boolean).join(' ') || '—'}</TableCell>}
+                <TableCell className="text-right font-mono tabular-nums">
+                  {Number.isInteger(l.qty) ? l.qty : l.qty.toFixed(2)} {l.unit}
+                </TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{money(l.unitCost, currency)}</TableCell>
+                <TableCell className="pr-4 text-right font-mono tabular-nums">{money(l.total, currency)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </Card>
   )
 }
 
@@ -112,57 +69,55 @@ export function EstimateView({ project, result }: EstimateViewProps) {
   ]
 
   return (
-    <div className="estimate-view view-pad">
-      <div className="estimate-grid">
-        <div className="estimate-tables">
-          <LineTable caption="Materials" lines={e.materials} currency={c} />
-          <LineTable caption="Hardware" lines={e.hardware} currency={c} showSku />
-          {e.labor.length === 0 ? (
-            <p className="empty">Labor: nothing yet.</p>
-          ) : (
-            <div className="table-wrap">
-              <table className="data-table">
-                <caption>Labor</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Bucket</th>
-                    <th scope="col" className="num">Time</th>
-                    <th scope="col" className="num">Cost</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {e.labor.map((l) => (
-                    <tr key={l.bucket}>
-                      <th scope="row" className="capitalize">
-                        {l.bucket}
-                      </th>
-                      <td className="num">{minutesLabel(l.minutes)}</td>
-                      <td className="num">{money(l.cost, c)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-        <aside className="totals" aria-labelledby="totals-heading">
-          <h3 id="totals-heading">Totals</h3>
-          <dl>
+    <div className="grid gap-4 p-6 lg:grid-cols-[1fr_300px]">
+      <div className="flex min-w-0 flex-col gap-4">
+        <LineTable caption="Materials" lines={e.materials} currency={c} />
+        <LineTable caption="Hardware" lines={e.hardware} currency={c} showSku />
+        <Card className="gap-0 bg-background">
+          <CardHeader className="pb-3">
+            <CardTitle>Labor</CardTitle>
+          </CardHeader>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col" className="pl-4">Bucket</TableHead>
+                <TableHead scope="col" className="text-right">Time</TableHead>
+                <TableHead scope="col" className="pr-4 text-right">Cost</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {e.labor.map((l) => (
+                <TableRow key={l.bucket}>
+                  <TableCell className="pl-4 capitalize">{l.bucket}</TableCell>
+                  <TableCell className="text-right font-mono">{minutesLabel(l.minutes)}</TableCell>
+                  <TableCell className="pr-4 text-right font-mono">{money(l.cost, c)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      </div>
+      <Card className="h-fit bg-background lg:sticky lg:top-4" aria-labelledby="totals-heading">
+        <CardHeader>
+          <CardTitle id="totals-heading">Totals</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          <dl className="flex flex-col gap-2 text-sm">
             {totals.map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{money(value, c)}</dd>
+              <div key={label} className="flex justify-between">
+                <dt className="text-muted-foreground">{label}</dt>
+                <dd className="font-mono tabular-nums">{money(value, c)}</dd>
               </div>
             ))}
-            <div className="price">
-              <dt>Price</dt>
-              <dd>{money(e.price, c)}</dd>
+            <Separator className="my-1" />
+            <div className="flex items-baseline justify-between">
+              <dt className="font-mono text-sm font-semibold">Price</dt>
+              <dd className="font-mono text-2xl font-semibold text-primary tabular-nums">{money(e.price, c)}</dd>
             </div>
           </dl>
-          <p className="hint">Catalog prices are placeholders. Verify supplier costs and part numbers.</p>
-        </aside>
-      </div>
-      <EstimateSettingsForm settings={project.estimate} />
+          <p className="text-xs text-muted-foreground">Catalog prices are placeholders. Verify supplier costs and part numbers.</p>
+        </CardContent>
+      </Card>
     </div>
   )
 }

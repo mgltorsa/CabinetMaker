@@ -25,20 +25,42 @@ import { browserStorage, loadProject, REJECTED_STORAGE_KEY } from './persistence
 import { notify } from './toast'
 import * as ops from './projectOps'
 
+/** What the 3D view shows (the floating "Toggle visibility" pills). */
 export interface ViewToggles {
-  /** Doors and drawer fronts. */
-  fronts: boolean
-  drawerBoxes: boolean
-  back: boolean
+  /** Overall W × H × D dimension lines on the selected cabinet. */
+  dimensions: boolean
   /** Countertop / finished top. */
   top: boolean
-  /** Slide drawers out along +Z. */
-  open: boolean
+  doors: boolean
+  /** Swing doors open on their hinges. */
+  doorsOpen: boolean
+  drawerFaces: boolean
+  /** Drawer boxes. */
+  drawers: boolean
+  /** Slide drawers (box and face) out along +Z. */
+  drawersOpen: boolean
+  back: boolean
 }
 
 export type ViewToggle = keyof ViewToggles
 
-export const DEFAULT_VIEW: ViewToggles = { fronts: true, drawerBoxes: true, back: true, top: true, open: false }
+export const DEFAULT_VIEW: ViewToggles = {
+  dimensions: true,
+  top: true,
+  doors: true,
+  doorsOpen: false,
+  drawerFaces: true,
+  drawers: true,
+  drawersOpen: false,
+  back: true,
+}
+
+/** The numbered sidebar sections; each drives what the main area shows. */
+export type WorkspaceSection = 'design' | 'build' | 'outputs' | 'cam'
+/** Main-area views while designing (sections 01 and 02). */
+export type ModelView = '3d' | 'front' | 'side' | 'joinery'
+/** Main-area views for section 03 "Drawings & BOM". */
+export type OutputView = 'cutlist' | 'cutplan' | 'estimate'
 
 export interface DesignerActions {
   /** Replace the whole project (load, import). Keeps a valid selection. */
@@ -48,6 +70,12 @@ export interface DesignerActions {
   setUnits: (units: UnitSystem) => void
   selectCabinet: (id: Id | null) => void
   setViewToggle: (key: ViewToggle, value: boolean) => void
+  setSection: (section: WorkspaceSection) => void
+  setModelView: (view: ModelView) => void
+  setOutputView: (view: OutputView) => void
+  /** Show the "What are you building?" preset picker in the sidebar. */
+  openPicker: () => void
+  closePicker: () => void
 
   addCabinetFromPreset: (type: CabinetType) => void
   duplicateCabinet: (id: Id) => void
@@ -67,6 +95,7 @@ export interface DesignerActions {
   removeBay: (cabinetId: Id, sectionId: Id, bayId: Id) => void
   moveBay: (cabinetId: Id, sectionId: Id, bayId: Id, delta: number) => void
   updateBay: (cabinetId: Id, sectionId: Id, bayId: Id, patch: ops.BayPatch) => void
+  setDrawerCount: (cabinetId: Id, sectionId: Id, count: number) => void
 
   updateMachine: (patch: Partial<Machine>) => void
   updateTool: (toolId: Id, patch: Partial<Omit<Tool, 'id'>>) => void
@@ -79,6 +108,10 @@ export interface DesignerState extends DesignerActions {
   project: Project
   selectedCabinetId: Id | null
   view: ViewToggles
+  section: WorkspaceSection
+  modelView: ModelView
+  outputView: OutputView
+  isPickerOpen: boolean
 }
 
 export type DesignerStore = StoreApi<DesignerState>
@@ -97,22 +130,33 @@ export function createDesignerStore(initial: Project = createProject()): Designe
       project: initial,
       selectedCabinetId: validSelection(initial, null),
       view: DEFAULT_VIEW,
+      section: 'design',
+      modelView: '3d',
+      outputView: 'cutlist',
+      isPickerOpen: initial.cabinets.length === 0,
 
-      setProject: (project) => set((s) => ({ project, selectedCabinetId: validSelection(project, s.selectedCabinetId) })),
+      setProject: (project) =>
+        set((s) => ({ project, selectedCabinetId: validSelection(project, s.selectedCabinetId), isPickerOpen: project.cabinets.length === 0 })),
       newProject: () => {
-        const project = createProject()
-        set({ project, selectedCabinetId: validSelection(project, null) })
+        // A new project starts empty: the picker asks what is being built.
+        const project = { ...createProject(), cabinets: [] }
+        set({ project, selectedCabinetId: null, isPickerOpen: true, section: 'design', modelView: '3d' })
       },
       setProjectName: (name) => edit((p) => ({ ...p, name })),
       setUnits: (units) => edit((p) => (p.units === units ? p : { ...p, units })),
       selectCabinet: (id) => set((s) => ({ selectedCabinetId: validSelection(s.project, id) })),
       setViewToggle: (key, value) => set((s) => ({ view: { ...s.view, [key]: value } })),
+      setSection: (section) => set({ section }),
+      setModelView: (modelView) => set({ modelView }),
+      setOutputView: (outputView) => set({ outputView }),
+      openPicker: () => set({ isPickerOpen: true }),
+      closePicker: () => set((s) => ({ isPickerOpen: s.project.cabinets.length === 0 })),
 
       addCabinetFromPreset: (type) =>
         set((s) => {
           const project = ops.addCabinet(s.project, createPreset(type))
           if (project === s.project) return {}
-          return { project, selectedCabinetId: project.cabinets.at(-1)?.id ?? s.selectedCabinetId }
+          return { project, selectedCabinetId: project.cabinets.at(-1)?.id ?? s.selectedCabinetId, isPickerOpen: false, section: 'design' as const }
         }),
       duplicateCabinet: (id) =>
         set((s) => {
@@ -127,7 +171,7 @@ export function createDesignerStore(initial: Project = createProject()): Designe
           // Keep the selection on a neighbour so the form does not jump to the top.
           const neighbour = project.cabinets[Math.min(index, project.cabinets.length - 1)]?.id ?? null
           const preferred = s.selectedCabinetId === id ? neighbour : s.selectedCabinetId
-          return { project, selectedCabinetId: validSelection(project, preferred) }
+          return { project, selectedCabinetId: validSelection(project, preferred), isPickerOpen: project.cabinets.length === 0 }
         }),
       updateCabinet: (id, patch) => edit((p) => ops.updateCabinet(p, id, patch)),
       updateConstruction: (id, patch) => edit((p) => ops.updateConstruction(p, id, patch)),
@@ -143,6 +187,7 @@ export function createDesignerStore(initial: Project = createProject()): Designe
       removeBay: (cabinetId, sectionId, bayId) => edit((p) => ops.removeBay(p, cabinetId, sectionId, bayId)),
       moveBay: (cabinetId, sectionId, bayId, delta) => edit((p) => ops.moveBay(p, cabinetId, sectionId, bayId, delta)),
       updateBay: (cabinetId, sectionId, bayId, patch) => edit((p) => ops.updateBay(p, cabinetId, sectionId, bayId, patch)),
+      setDrawerCount: (cabinetId, sectionId, count) => edit((p) => ops.setDrawerCount(p, cabinetId, sectionId, count)),
 
       updateMachine: (patch) => edit((p) => ops.updateMachine(p, patch)),
       updateTool: (toolId, patch) => edit((p) => ops.updateTool(p, toolId, patch)),

@@ -5,7 +5,8 @@ import { DEFAULT_VIEW } from '../store'
 import { sheetFilename, slugify } from './download'
 import { parseLengthField, parseNumberField, parseOptionalLengthField } from './fieldParse'
 import { dimsLabel, lengthLabel, money } from './format'
-import { buildScene, isDrawerPart, isPartVisible } from './scene'
+import { buildProject } from '@/engine'
+import { buildScene, isDrawerPart, isPartVisible, runOffsets } from './scene'
 import { overallYield } from './sheets'
 
 describe('field parsing', () => {
@@ -94,10 +95,15 @@ describe('3D scene', () => {
   })
   const buildOf = (parts: Part[]): ProjectBuild => ({ cabinets: [], parts, hardware: [], warnings: [] })
 
+  const opts = { units: 'metric' as const, selectedCabinetId: 'cab_1' }
+
   it('hides groups by toggle', () => {
-    expect(isPartVisible(part({ group: 'front' }), { ...DEFAULT_VIEW, fronts: false })).toBe(false)
+    expect(isPartVisible(part({ group: 'front', role: 'door-1-2-1' }), { ...DEFAULT_VIEW, doors: false })).toBe(false)
+    expect(isPartVisible(part({ group: 'front', role: 'drawer-front-1-1' }), { ...DEFAULT_VIEW, doors: false })).toBe(true)
+    expect(isPartVisible(part({ group: 'front', role: 'drawer-front-1-1' }), { ...DEFAULT_VIEW, drawerFaces: false })).toBe(false)
+    expect(isPartVisible(part({ group: 'drawer-box' }), { ...DEFAULT_VIEW, drawers: false })).toBe(false)
     expect(isPartVisible(part({ group: 'back' }), { ...DEFAULT_VIEW, back: false })).toBe(false)
-    expect(isPartVisible(part({ group: 'carcass' }), { ...DEFAULT_VIEW, back: false, fronts: false, top: false, drawerBoxes: false })).toBe(true)
+    expect(isPartVisible(part({ group: 'carcass' }), { ...DEFAULT_VIEW, back: false, doors: false, top: false, drawers: false, drawerFaces: false })).toBe(true)
   })
 
   it('recognises drawer parts', () => {
@@ -106,26 +112,71 @@ describe('3D scene', () => {
     expect(isDrawerPart(part({ group: 'front', role: 'door-left' }))).toBe(false)
   })
 
-  it('builds metre-scale meshes centred on the run', () => {
+  it('builds metre-scale meshes centred on the run in X, backs on the wall plane', () => {
     const { cabinets } = fixtureProject()
-    const scene = buildScene(buildOf([part({})]), cabinets, DEFAULT_VIEW)
+    const scene = buildScene(buildOf([part({})]), cabinets, DEFAULT_VIEW, opts)
     expect(scene.meshes).toHaveLength(1)
     const mesh = scene.meshes[0]!
     expect(mesh.size).toEqual([0.1, 0.2, 0.3])
-    expect(mesh.position).toEqual([0, 0.1, 0])
+    expect(mesh.position).toEqual([0, 0.1, 0.15])
+    expect(mesh.finish).toBe('carcass')
   })
 
-  it('slides drawer parts out along +Z when open', () => {
+  it('slides drawer parts out along +Z when drawers are open', () => {
     const { cabinets } = fixtureProject()
     const drawer = part({ id: 'c:d', group: 'drawer-box', role: 'drawer-1-side' })
     const carcass = part({ id: 'c:s' })
-    const closed = buildScene(buildOf([carcass, drawer]), cabinets, DEFAULT_VIEW)
-    const open = buildScene(buildOf([carcass, drawer]), cabinets, { ...DEFAULT_VIEW, open: true })
+    const closed = buildScene(buildOf([carcass, drawer]), cabinets, DEFAULT_VIEW, opts)
+    const open = buildScene(buildOf([carcass, drawer]), cabinets, { ...DEFAULT_VIEW, drawersOpen: true }, opts)
     const z = (s: typeof open, id: string) => s.meshes.find((m) => m.partId === id)!.position[2]
     expect(z(open, 'c:d') - z(open, 'c:s')).toBeGreaterThan(z(closed, 'c:d') - z(closed, 'c:s'))
   })
 
+  it('swings doors outward on their hinge side', () => {
+    const project = fixtureProject()
+    const bay = project.cabinets[0]!.sections[0]!.bays[1]!
+    bay.doorCount = 1
+    for (const side of ['left', 'right'] as const) {
+      bay.hingeSide = side
+      const build = buildProject(project)
+      const door = build.parts.find((p) => p.group === 'front' && p.role.startsWith('door'))!
+      const closed = buildScene(build, project.cabinets, DEFAULT_VIEW, opts).meshes.find((m) => m.partId === door.id)!
+      const open = buildScene(build, project.cabinets, { ...DEFAULT_VIEW, doorsOpen: true }, opts).meshes.find((m) => m.partId === door.id)!
+      expect(open.position[2]).toBeGreaterThan(closed.position[2]) // swings out of the cabinet
+      expect(Math.sign(open.position[0] - closed.position[0])).toBe(side === 'left' ? -1 : 1) // towards the hinge
+    }
+  })
+
+  it('places pulls on show faces and shelf-pin holes on inside faces', () => {
+    const project = fixtureProject()
+    const scene = buildScene(buildProject(project), project.cabinets, DEFAULT_VIEW, opts)
+    expect(scene.pulls.length).toBe(3) // one drawer + two doors
+    for (const pull of scene.pulls) expect(pull.normal).toEqual([0, 0, 1])
+    expect(scene.pinHoles.length).toBeGreaterThan(0)
+    // Pins on the left side point right (into the cabinet), on the right side point left.
+    expect(new Set(scene.pinHoles.map((h) => h.normal[0]))).toEqual(new Set([1, -1]))
+  })
+
+  it('dimensions the selected cabinet in project units', () => {
+    const project = fixtureProject()
+    const build = buildProject(project)
+    const metric = buildScene(build, project.cabinets, DEFAULT_VIEW, opts)
+    expect(metric.dimensions.map((d) => d.label)).toEqual(['600', '870', '580'])
+    const imperial = buildScene(build, project.cabinets, DEFAULT_VIEW, { ...opts, units: 'imperial' })
+    expect(imperial.dimensions[0]!.label).toBe('23 5/8"')
+    expect(buildScene(build, project.cabinets, { ...DEFAULT_VIEW, dimensions: false }, opts).dimensions).toEqual([])
+  })
+
+  it('stacks wall cabinets in an upper run from the left', () => {
+    const project = fixtureProject()
+    const base = project.cabinets[0]!
+    const wall = { ...base, id: 'cab_w', type: 'wall' as const }
+    const offsets = runOffsets([base, { ...base, id: 'cab_2' }, wall])
+    expect(offsets.get('cab_2')).toBeGreaterThan(0)
+    expect(offsets.get('cab_w')).toBe(0)
+  })
+
   it('handles an empty build', () => {
-    expect(buildScene(buildOf([]), [], DEFAULT_VIEW).meshes).toEqual([])
+    expect(buildScene(buildOf([]), [], DEFAULT_VIEW, opts).meshes).toEqual([])
   })
 })

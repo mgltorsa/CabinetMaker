@@ -35,7 +35,7 @@ export class ErrorBoundary extends Component<Props, State> {
   render(): ReactNode {
     if (!this.state.error) return this.props.children
     return (
-      <div className="view-error" role="alert">
+      <div role="alert" className="m-4 rounded-md border border-destructive/40 bg-destructive/8 p-3 text-sm text-destructive">
         <strong>{this.props.title}</strong>
         <p>{this.state.error.message}</p>
       </div>

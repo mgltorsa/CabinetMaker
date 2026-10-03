@@ -39,14 +39,14 @@ export function ToolpathPreview({ sheet, toolpaths, partsById, tools, title }: T
   const kinds = [...new Set(toolpaths.map((t) => t.kind))]
 
   return (
-    <figure className="toolpath-preview">
-      <svg viewBox={`0 0 ${sheet.length} ${sheet.width}`} role="img" aria-label={title} preserveAspectRatio="xMidYMid meet">
+    <figure className="flex flex-col gap-2 rounded-md border bg-white p-3 shadow-xs">
+      <svg className="h-auto w-full" viewBox={`0 0 ${sheet.length} ${sheet.width}`} role="img" aria-label={title} preserveAspectRatio="xMidYMid meet">
         <title>{title}</title>
         {/* Flip Y so the sheet origin sits bottom-left like the machine. */}
         <g transform={`translate(0 ${sheet.width}) scale(1 -1)`}>
-          <rect x={0} y={0} width={sheet.length} height={sheet.width} className="sheet-stock" vectorEffect="non-scaling-stroke" />
+          <rect x={0} y={0} width={sheet.length} height={sheet.width} fill="#efe7d6" stroke="#8a7f70" vectorEffect="non-scaling-stroke" />
           {sheet.placements.map((pl) => (
-            <rect key={pl.partId} x={pl.x} y={pl.y} width={pl.sizeX} height={pl.sizeY} className="sheet-part" vectorEffect="non-scaling-stroke">
+            <rect key={pl.partId} x={pl.x} y={pl.y} width={pl.sizeX} height={pl.sizeY} fill="#fbf8f2" stroke="#b5aa98" strokeDasharray="4 3" vectorEffect="non-scaling-stroke">
               <title>{partsById.get(pl.partId)?.name ?? pl.partId}</title>
             </rect>
           ))}
@@ -61,10 +61,10 @@ export function ToolpathPreview({ sheet, toolpaths, partsById, tools, title }: T
         </g>
       </svg>
       {kinds.length > 0 && (
-        <figcaption className="legend">
+        <figcaption className="flex gap-4 font-mono text-xs text-muted-foreground">
           {kinds.map((k) => (
-            <span key={k} className="legend-item">
-              <span className="swatch" style={{ background: TOOLPATH_COLORS[k] }} aria-hidden="true" />
+            <span key={k} className="flex items-center gap-1.5 capitalize">
+              <span className="h-1 w-4 rounded" style={{ background: TOOLPATH_COLORS[k] }} aria-hidden="true" />
               {k}
             </span>
           ))}

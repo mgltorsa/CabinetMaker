@@ -1,7 +1,8 @@
 'use client'
 
 import type { Machine, MachinePoint, Tool, UnitSystem } from '@/core/types'
-import { CheckboxField, FieldGroup, LengthInput, NumberInput, SelectField, type SelectOption, TextInput } from '../components/fields'
+import { CheckboxField, FieldGrid, FieldGroup, LengthInput, NumberInput, SelectField, type SelectOption, TextInput } from '../components/fields'
+import { CardCaption, SpecCard } from '../components/sidebar/SpecCard'
 import { MAX_TAB_WIDTH, MIN_STEP_DOWN, MIN_TAB_SPACING, TOOL_NUMBER } from '../lib/limits'
 import { cuttingTools, duplicateToolNumbers, toolLabel, toolRoleProblem } from '../lib/machineTools'
 import { useDesigner } from '../store'
@@ -12,100 +13,50 @@ const TOOL_KINDS: SelectOption<Tool['kind']>[] = [
   { value: 'drill', label: 'Drill' },
 ]
 
-type ToolRowProps = {
+type ToolCardProps = {
   tool: Tool
   units: UnitSystem
   /** Another tool has the same number. */
   isDuplicate: boolean
 }
 
-function ToolRow({ tool, units, isDuplicate }: ToolRowProps) {
+/** One tool of the library: summary line, all cutting data on expand. */
+function ToolCard({ tool, units, isDuplicate }: ToolCardProps) {
   const updateTool = useDesigner((s) => s.updateTool)
   const set = (patch: Partial<Omit<Tool, 'id'>>): void => updateTool(tool.id, patch)
   const name = `T${tool.number}`
   const numberError = isDuplicate ? `${name} is used by another tool; numbers must be unique` : undefined
   return (
-    <tr>
-      <td>
-        <NumberInput
-          label={`${name} number`}
-          isLabelHidden
-          value={tool.number}
-          integer
-          min={TOOL_NUMBER.min}
-          max={TOOL_NUMBER.max}
-          error={numberError}
-          onCommit={(number) => set({ number })}
-        />
-      </td>
-      <td>
-        <TextInput label={`${name} name`} isLabelHidden value={tool.name} onCommit={(n) => set({ name: n })} />
-      </td>
-      <td>
-        <SelectField label={`${name} kind`} isLabelHidden value={tool.kind} options={TOOL_KINDS} onChange={(kind) => set({ kind })} />
-      </td>
-      <td>
-        <LengthInput label={`${name} diameter`} isLabelHidden value={tool.diameter} units={units} min={0.1} onCommit={(diameter) => set({ diameter })} />
-      </td>
-      <td>
-        <LengthInput
-          label={`${name} flute length`}
-          isLabelHidden
-          value={tool.fluteLength}
-          units={units}
-          min={Math.max(MIN_STEP_DOWN, tool.stepDown)}
-          onCommit={(fluteLength) => set({ fluteLength })}
-        />
-      </td>
-      <td>
-        <NumberInput label={`${name} RPM`} isLabelHidden value={tool.rpm} integer min={1} onCommit={(rpm) => set({ rpm })} />
-      </td>
-      <td>
-        <NumberInput label={`${name} plunge feed (mm/min)`} isLabelHidden value={tool.plungeFeed} min={1} onCommit={(plungeFeed) => set({ plungeFeed })} />
-      </td>
-      <td>
-        <NumberInput label={`${name} cut feed (mm/min)`} isLabelHidden value={tool.cutFeed} min={1} onCommit={(cutFeed) => set({ cutFeed })} />
-      </td>
-      <td>
-        <LengthInput
-          label={`${name} step down`}
-          isLabelHidden
-          value={tool.stepDown}
-          units={units}
-          min={MIN_STEP_DOWN}
-          max={tool.fluteLength}
-          onCommit={(stepDown) => set({ stepDown })}
-        />
-      </td>
-    </tr>
+    <FieldGroup title={`${name} · ${tool.name}`} description={`Ø ${tool.diameter} · ${tool.kind}`} isOpen={isDuplicate}>
+      <NumberInput label={`${name} number`} value={tool.number} integer min={TOOL_NUMBER.min} max={TOOL_NUMBER.max} error={numberError} onCommit={(number) => set({ number })} />
+      <SelectField label={`${name} kind`} value={tool.kind} options={TOOL_KINDS} onChange={(kind) => set({ kind })} />
+      <div className="col-span-2">
+        <TextInput label={`${name} name`} value={tool.name} onCommit={(n) => set({ name: n })} />
+      </div>
+      <LengthInput label={`${name} diameter`} value={tool.diameter} units={units} min={0.1} onCommit={(diameter) => set({ diameter })} />
+      <LengthInput
+        label={`${name} flute length`}
+        value={tool.fluteLength}
+        units={units}
+        min={Math.max(MIN_STEP_DOWN, tool.stepDown)}
+        onCommit={(fluteLength) => set({ fluteLength })}
+      />
+      <NumberInput label={`${name} RPM`} value={tool.rpm} integer min={1} onCommit={(rpm) => set({ rpm })} />
+      <LengthInput label={`${name} step down`} value={tool.stepDown} units={units} min={MIN_STEP_DOWN} max={tool.fluteLength} onCommit={(stepDown) => set({ stepDown })} />
+      <NumberInput label={`${name} plunge feed (mm/min)`} value={tool.plungeFeed} min={1} onCommit={(plungeFeed) => set({ plungeFeed })} />
+      <NumberInput label={`${name} cut feed (mm/min)`} value={tool.cutFeed} min={1} onCommit={(cutFeed) => set({ cutFeed })} />
+    </FieldGroup>
   )
 }
 
-export function ToolTable({ tools, units }: { tools: readonly Tool[]; units: UnitSystem }) {
+export function ToolLibrary({ tools, units }: { tools: readonly Tool[]; units: UnitSystem }) {
   const duplicates = duplicateToolNumbers(tools)
   return (
-    <div className="table-wrap">
-      <table className="data-table tool-table">
-        <caption>Tool library</caption>
-        <thead>
-          <tr>
-            <th scope="col">No.</th>
-            <th scope="col">Name</th>
-            <th scope="col">Kind</th>
-            <th scope="col">Diameter</th>
-            <th scope="col">Flute</th>
-            <th scope="col">RPM</th>
-            <th scope="col">Plunge mm/min</th>
-            <th scope="col">Cut mm/min</th>
-            <th scope="col">Step down</th>
-          </tr>
-        </thead>
-        <tbody>
-          {tools.map((t) => (
-            <ToolRow key={t.id} tool={t} units={units} isDuplicate={duplicates.has(t.number)} />
-          ))}
-        </tbody>
-      </table>
+    <div className="flex flex-col gap-2">
+      {tools.map((t) => (
+        // Re-keyed on the duplicate flag so a card opens itself when it gains the error.
+        <ToolCard key={`${t.id}:${duplicates.has(t.number)}`} tool={t} units={units} isDuplicate={duplicates.has(t.number)} />
+      ))}
     </div>
   )
 }
@@ -129,14 +80,14 @@ function PointFields({ label, point, units, onCommit }: PointFieldsProps) {
 
 const toolOption = (t: Tool): SelectOption<string> => ({ value: t.id, label: toolLabel(t) })
 
-type ToolChoice = { options: SelectOption<string>[]; error?: string }
+export type ToolChoice = { options: SelectOption<string>[]; error?: string }
 
 /**
  * Options for a machine tool role (`mustCut`: profile/dado, so no drills). The
  * current choice stays listed so the select shows the truth, flagged when it
  * is missing or unsuitable.
  */
-function toolChoice(role: string, currentId: string, tools: readonly Tool[], mustCut: boolean): ToolChoice {
+export function toolChoice(role: string, currentId: string, tools: readonly Tool[], mustCut: boolean): ToolChoice {
   const allowed = mustCut ? cuttingTools(tools) : tools
   const options = allowed.map(toolOption)
   const error = toolRoleProblem(role, currentId, tools, mustCut) ?? undefined
@@ -146,13 +97,14 @@ function toolChoice(role: string, currentId: string, tools: readonly Tool[], mus
   return { options: [{ value: currentId, label }, ...options], error }
 }
 
-type MachineSettingsProps = {
+type CamSectionProps = {
   machine: Machine
   tools: readonly Tool[]
   units: UnitSystem
 }
 
-export function MachineSettings({ machine, tools, units }: MachineSettingsProps) {
+/** 04 CAM / CNC: machine, tools, hold-down and positions. The toolpath preview is in the main area. */
+export function CamSection({ machine, tools, units }: CamSectionProps) {
   const update = useDesigner((s) => s.updateMachine)
   const set = (patch: Partial<Machine>): void => update(patch)
   const profile = toolChoice('Profile', machine.profileToolId, tools, true)
@@ -162,33 +114,68 @@ export function MachineSettings({ machine, tools, units }: MachineSettingsProps)
     { value: 'G21', label: 'Metric (G21)' },
     { value: 'G20', label: 'Inch (G20) — coming soon', isDisabled: true },
   ]
+  const toolName = (id: string): string => {
+    const t = tools.find((x) => x.id === id)
+    return t ? `T${t.number}` : '—'
+  }
+  const duplicates = duplicateToolNumbers(tools)
 
   return (
-    <>
-      <FieldGroup title="Machine" isOpen>
-        <TextInput label="Machine name" value={machine.name} onCommit={(name) => set({ name })} />
-        <SelectField label="Output units" value={machine.units} options={unitsOptions} onChange={(u) => set({ units: u })} />
-        <LengthInput label="Table X" value={machine.tableX} units={units} min={1} onCommit={(tableX) => set({ tableX })} />
-        <LengthInput label="Table Y" value={machine.tableY} units={units} min={1} onCommit={(tableY) => set({ tableY })} />
-        <LengthInput label="Safe Z" value={machine.safeZ} units={units} min={0.1} onCommit={(safeZ) => set({ safeZ })} />
-        <LengthInput label="Program safe Z" value={machine.programSafeZ} units={units} min={0.1} onCommit={(programSafeZ) => set({ programSafeZ })} />
-        <LengthInput label="Rapid clearance" value={machine.rapidClearance} units={units} onCommit={(rapidClearance) => set({ rapidClearance })} />
-        <LengthInput label="Through-cut extra depth" value={machine.throughCutExtra} units={units} onCommit={(throughCutExtra) => set({ throughCutExtra })} />
-        <SelectField label="Profile tool" value={machine.profileToolId} {...profile} onChange={(profileToolId) => set({ profileToolId })} />
-        <SelectField label="Dado tool" value={machine.dadoToolId} {...dado} onChange={(dadoToolId) => set({ dadoToolId })} />
-        <SelectField label="Drill tool" value={machine.drillToolId} {...drill} onChange={(drillToolId) => set({ drillToolId })} />
-      </FieldGroup>
+    <div className="flex flex-col gap-2">
+      <SpecCard
+        index="04·1"
+        title="Machine"
+        summary={`${machine.name} · ${machine.tableX} × ${machine.tableY}`}
+        defaultOpen
+        advanced={
+          <>
+            <LengthInput label="Program safe Z" value={machine.programSafeZ} units={units} min={0.1} onCommit={(programSafeZ) => set({ programSafeZ })} />
+            <LengthInput label="Rapid clearance" value={machine.rapidClearance} units={units} onCommit={(rapidClearance) => set({ rapidClearance })} />
+            <LengthInput label="Through-cut extra depth" value={machine.throughCutExtra} units={units} onCommit={(throughCutExtra) => set({ throughCutExtra })} />
+            <SelectField label="Output units" value={machine.units} options={unitsOptions} onChange={(u) => set({ units: u })} />
+          </>
+        }
+      >
+        <FieldGrid>
+          <div className="col-span-2">
+            <TextInput label="Machine name" value={machine.name} onCommit={(name) => set({ name })} />
+          </div>
+          <LengthInput label="Table X" value={machine.tableX} units={units} min={1} onCommit={(tableX) => set({ tableX })} />
+          <LengthInput label="Table Y" value={machine.tableY} units={units} min={1} onCommit={(tableY) => set({ tableY })} />
+          <LengthInput label="Safe Z" value={machine.safeZ} units={units} min={0.1} onCommit={(safeZ) => set({ safeZ })} />
+        </FieldGrid>
+      </SpecCard>
 
-      <FieldGroup title="Tabs & onion skin" isOpen>
+      <SpecCard
+        index="04·2"
+        title="Tooling"
+        summary={`Profile ${toolName(machine.profileToolId)} · dado ${toolName(machine.dadoToolId)} · drill ${toolName(machine.drillToolId)}`}
+        defaultOpen={duplicates.size > 0}
+      >
+        <FieldGrid className="grid-cols-3">
+          <SelectField label="Profile tool" value={machine.profileToolId} {...profile} onChange={(profileToolId) => set({ profileToolId })} />
+          <SelectField label="Dado tool" value={machine.dadoToolId} {...dado} onChange={(dadoToolId) => set({ dadoToolId })} />
+          <SelectField label="Drill tool" value={machine.drillToolId} {...drill} onChange={(drillToolId) => set({ drillToolId })} />
+        </FieldGrid>
+        <CardCaption className="pt-1">Tool library</CardCaption>
+        <ToolLibrary tools={tools} units={units} />
+      </SpecCard>
+
+      <SpecCard
+        index="04·3"
+        title="Hold-down"
+        summary={machine.tabs.enabled ? `Tabs every ${machine.tabs.spacing} · ${machine.tabs.width} wide` : `Onion skin ${machine.onionSkin}`}
+      >
         <CheckboxField label="Hold parts with tabs" isChecked={machine.tabs.enabled} onChange={(enabled) => set({ tabs: { ...machine.tabs, enabled } })} />
-        <LengthInput label="Tab spacing" value={machine.tabs.spacing} units={units} min={MIN_TAB_SPACING} onCommit={(spacing) => set({ tabs: { ...machine.tabs, spacing } })} />
-        <LengthInput label="Tab width" value={machine.tabs.width} units={units} min={0.1} max={MAX_TAB_WIDTH} onCommit={(width) => set({ tabs: { ...machine.tabs, width } })} />
-        <LengthInput label="Tab thickness" value={machine.tabs.thickness} units={units} min={0.1} onCommit={(thickness) => set({ tabs: { ...machine.tabs, thickness } })} />
-        <LengthInput label="Onion skin (tabs off)" value={machine.onionSkin} units={units} onCommit={(onionSkin) => set({ onionSkin })} />
-      </FieldGroup>
+        <FieldGrid>
+          <LengthInput label="Tab spacing" value={machine.tabs.spacing} units={units} min={MIN_TAB_SPACING} onCommit={(spacing) => set({ tabs: { ...machine.tabs, spacing } })} />
+          <LengthInput label="Tab width" value={machine.tabs.width} units={units} min={0.1} max={MAX_TAB_WIDTH} onCommit={(width) => set({ tabs: { ...machine.tabs, width } })} />
+          <LengthInput label="Tab thickness" value={machine.tabs.thickness} units={units} min={0.1} onCommit={(thickness) => set({ tabs: { ...machine.tabs, thickness } })} />
+          <LengthInput label="Onion skin (tabs off)" value={machine.onionSkin} units={units} onCommit={(onionSkin) => set({ onionSkin })} />
+        </FieldGrid>
+      </SpecCard>
 
-      <FieldGroup title="Home, tool change & park">
-        <PointFields label="Home" point={machine.home} units={units} onCommit={(home) => set({ home })} />
+      <SpecCard index="04·4" title="Positions" summary={`Tool change ${machine.toolChange.mode === 'manual' ? 'manual (pause)' : 'automatic (M6)'}`}>
         <SelectField
           label="Tool change"
           value={machine.toolChange.mode}
@@ -198,11 +185,12 @@ export function MachineSettings({ machine, tools, units }: MachineSettingsProps)
           ]}
           onChange={(mode) => set({ toolChange: { ...machine.toolChange, mode } })}
         />
-        <PointFields label="Tool change" point={machine.toolChange} units={units} onCommit={(p) => set({ toolChange: { ...p, mode: machine.toolChange.mode } })} />
-        <PointFields label="Park" point={machine.park} units={units} onCommit={(park) => set({ park })} />
-      </FieldGroup>
-
-      <ToolTable tools={tools} units={units} />
-    </>
+        <FieldGrid className="grid-cols-3">
+          <PointFields label="Home" point={machine.home} units={units} onCommit={(home) => set({ home })} />
+          <PointFields label="Tool change" point={machine.toolChange} units={units} onCommit={(p) => set({ toolChange: { ...p, mode: machine.toolChange.mode } })} />
+          <PointFields label="Park" point={machine.park} units={units} onCommit={(park) => set({ park })} />
+        </FieldGrid>
+      </SpecCard>
+    </div>
   )
 }

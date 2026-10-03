@@ -4,8 +4,8 @@ import dynamic from 'next/dynamic'
 import { useMemo, useState } from 'react'
 import type { Project } from '@/core/types'
 import type { PipelineResult } from '@/pipeline'
-import { CheckboxField } from '../components/fields'
 import { ErrorBoundary } from '../components/ErrorBoundary'
+import { cn } from '../lib/cn'
 import { dimsLabel } from '../lib/format'
 import { buildScene } from '../lib/scene'
 import { type ViewToggle, useDesigner } from '../store'
@@ -13,16 +13,50 @@ import { type ViewToggle, useDesigner } from '../store'
 // three.js touches `window`/WebGL at import time, so keep it out of the static HTML.
 const Viewer3D = dynamic(() => import('./Viewer3D'), {
   ssr: false,
-  loading: () => <p className="empty">Loading 3D view…</p>,
+  loading: () => <p className="grid h-full place-items-center text-sm text-muted-foreground">Loading 3D view…</p>,
 })
 
-const TOGGLES: { key: ViewToggle; label: string }[] = [
-  { key: 'fronts', label: 'Doors & fronts' },
-  { key: 'drawerBoxes', label: 'Drawer boxes' },
-  { key: 'back', label: 'Back' },
-  { key: 'top', label: 'Top / countertop' },
-  { key: 'open', label: 'Open drawers' },
+/** The floating "Toggle visibility" pills, in the order shown. */
+export const VISIBILITY_TOGGLES: { key: ViewToggle; label: string }[] = [
+  { key: 'dimensions', label: 'Dimensions' },
+  { key: 'top', label: 'Top' },
+  { key: 'doors', label: 'Doors' },
+  { key: 'doorsOpen', label: 'Doors open' },
+  { key: 'drawerFaces', label: 'Drawer faces' },
+  { key: 'drawers', label: 'Drawers' },
+  { key: 'drawersOpen', label: 'Drawers open' },
+  { key: 'back', label: 'Cabinet back' },
 ]
+
+function VisibilityPills() {
+  const view = useDesigner((s) => s.view)
+  const setViewToggle = useDesigner((s) => s.setViewToggle)
+  return (
+    <div role="group" aria-labelledby="visibility-heading" className="pointer-events-auto flex w-fit flex-col gap-1.5">
+      <p id="visibility-heading" className="font-mono text-[11px] tracking-wider text-muted-foreground uppercase">
+        Toggle visibility
+      </p>
+      {VISIBILITY_TOGGLES.map((t) => {
+        const isOn = view[t.key]
+        return (
+          <button
+            key={t.key}
+            type="button"
+            aria-pressed={isOn}
+            onClick={() => setViewToggle(t.key, !isOn)}
+            className={cn(
+              'flex h-7 items-center gap-2 rounded-md border px-2.5 text-left text-[13px] shadow-xs transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              isOn ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90' : 'border-border bg-background/85 text-muted-foreground hover:bg-background',
+            )}
+          >
+            <span aria-hidden="true" className={cn('size-1.5 rounded-full', isOn ? 'bg-primary-foreground' : 'border border-muted-foreground')} />
+            {t.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 type ThreeViewProps = {
   project: Project
@@ -31,42 +65,43 @@ type ThreeViewProps = {
 
 export function ThreeView({ project, result }: ThreeViewProps) {
   const view = useDesigner((s) => s.view)
-  const setViewToggle = useDesigner((s) => s.setViewToggle)
+  const selectedCabinetId = useDesigner((s) => s.selectedCabinetId)
   const selectCabinet = useDesigner((s) => s.selectCabinet)
   const [hoveredPartId, setHoveredPartId] = useState<string | null>(null)
-  const scene = useMemo(() => buildScene(result.build, project.cabinets, view), [result.build, project.cabinets, view])
+  const scene = useMemo(
+    () => buildScene(result.build, project.cabinets, view, { units: project.units, selectedCabinetId }),
+    [result.build, project.cabinets, view, project.units, selectedCabinetId],
+  )
   const hovered = hoveredPartId === null ? undefined : result.partsById.get(hoveredPartId)
   const cabinetName = hovered ? project.cabinets.find((c) => c.id === hovered.cabinetId)?.name : undefined
 
   return (
-    <div className="three-view">
-      <fieldset className="toggles">
-        <legend className="visually-hidden">Show in 3D</legend>
-        {TOGGLES.map((t) => (
-          <CheckboxField key={t.key} label={t.label} isChecked={view[t.key]} onChange={(v) => setViewToggle(t.key, v)} />
-        ))}
-      </fieldset>
-      <p className="visually-hidden">
-        3D model with {scene.meshes.length} visible parts. Drag to orbit, scroll to zoom; the Front, Side and Parts tabs give the same information as text and
-        drawings.
+    <div className="relative h-full min-h-[420px] w-full">
+      <p className="sr-only">
+        3D model with {scene.meshes.length} visible parts. Drag to orbit, scroll to zoom; the Front, Side and Joinery views and the cut list give the same
+        information as drawings and text.
       </p>
-      <div className="canvas-wrap">
-        {scene.meshes.length === 0 ? (
-          <p className="empty">Nothing to show. Add a cabinet or turn parts back on.</p>
-        ) : (
-          <ErrorBoundary title="The 3D view could not start (WebGL may be unavailable).">
-            <Viewer3D scene={scene} hoveredPartId={hoveredPartId} onHover={setHoveredPartId} onPick={selectCabinet} />
-          </ErrorBoundary>
+      {scene.meshes.length === 0 ? (
+        <p className="grid h-full place-items-center text-sm text-muted-foreground">Nothing to show. Add a cabinet or turn parts back on.</p>
+      ) : (
+        <ErrorBoundary title="The 3D view could not start (WebGL may be unavailable).">
+          <Viewer3D scene={scene} hoveredPartId={hoveredPartId} onHover={setHoveredPartId} onPick={selectCabinet} />
+        </ErrorBoundary>
+      )}
+      <div className="pointer-events-none absolute top-14 left-3">
+        <VisibilityPills />
+      </div>
+      <div
+        aria-live="polite"
+        className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-background/90 px-2.5 py-1.5 font-mono text-xs shadow-xs empty:hidden"
+      >
+        {hovered && (
+          <>
+            <strong className="font-semibold">{hovered.name}</strong>
+            {cabinetName && <span className="text-muted-foreground"> · {cabinetName}</span>}
+            <span className="text-muted-foreground"> · {dimsLabel(hovered, project.units)}</span>
+          </>
         )}
-        <div className="hover-info" aria-live="polite">
-          {hovered && (
-            <>
-              <strong>{hovered.name}</strong>
-              {cabinetName && <span> · {cabinetName}</span>}
-              <span> · {dimsLabel(hovered, project.units)}</span>
-            </>
-          )}
-        </div>
       </div>
     </div>
   )

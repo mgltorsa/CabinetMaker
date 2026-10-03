@@ -31,13 +31,40 @@ describe('designer store: selection and project', () => {
     expect(get().selectedCabinetId).toBeNull()
   })
 
-  it('newProject replaces the project with a fresh default', () => {
+  it('newProject starts an empty project and opens the preset picker', () => {
     const { get } = setup()
     const before = get().project
     get().newProject()
     expect(get().project).not.toBe(before)
-    expect(get().project.cabinets).toHaveLength(1)
+    expect(get().project.cabinets).toHaveLength(0)
+    expect(get().selectedCabinetId).toBeNull()
+    expect(get().isPickerOpen).toBe(true)
+  })
+
+  it('adding a preset closes the picker and selects the new cabinet', () => {
+    const { get } = setup()
+    get().newProject()
+    get().addCabinetFromPreset('bookshelf')
+    expect(get().isPickerOpen).toBe(false)
     expect(get().selectedCabinetId).toBe(get().project.cabinets[0]!.id)
+    expect(get().section).toBe('design')
+  })
+
+  it('keeps the picker open while the project has no cabinets', () => {
+    const { get } = setup()
+    get().newProject()
+    get().closePicker()
+    expect(get().isPickerOpen).toBe(true)
+  })
+
+  it('switches workspace section and views', () => {
+    const { get } = setup()
+    get().setSection('outputs')
+    get().setOutputView('estimate')
+    get().setModelView('joinery')
+    expect(get().section).toBe('outputs')
+    expect(get().outputView).toBe('estimate')
+    expect(get().modelView).toBe('joinery')
   })
 
   it('edits project name and units immutably', () => {
@@ -60,9 +87,9 @@ describe('designer store: selection and project', () => {
 
   it('toggles view flags', () => {
     const { get } = setup()
-    get().setViewToggle('open', true)
+    get().setViewToggle('doorsOpen', true)
     get().setViewToggle('back', false)
-    expect(get().view.open).toBe(true)
+    expect(get().view.doorsOpen).toBe(true)
     expect(get().view.back).toBe(false)
   })
 })

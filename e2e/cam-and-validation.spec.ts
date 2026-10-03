@@ -1,31 +1,14 @@
 import { readFile } from 'node:fs/promises'
-import { expect, type Page, test } from '@playwright/test'
-
-type JsonProject = {
-  name: string
-  tools: { stepDown: number }[]
-  hardware: { id: string; kind: string; props: Record<string, number> }[]
-}
+import { expect, test } from '@playwright/test'
+import { exportedProject, importProject, openCard, openSection } from './helpers'
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('tablist', { name: 'Views' })).toBeVisible()
 })
 
-/** The current project, via the Export JSON button. */
-async function exportedProject(page: Page): Promise<JsonProject> {
-  const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export JSON' }).click()
-  const download = await downloadPromise
-  return JSON.parse(await readFile(await download.path(), 'utf8')) as JsonProject
-}
-
-async function importProject(page: Page, project: JsonProject): Promise<void> {
-  await page.locator('input[type="file"]').setInputFiles({ name: 'project.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(project)) })
-}
-
 test('CAM names sheets per material and downloads matching .nc files', async ({ page }) => {
-  await page.getByRole('tab', { name: 'CAM' }).click()
+  await openSection(page, 'CAM / CNC')
   const picker = page.getByLabel('Sheet', { exact: true })
   await expect(picker.locator('option').first()).toHaveText('Sheet 1 (ply-18#1) — 18 mm plywood')
 
@@ -39,7 +22,7 @@ test('CAM names sheets per material and downloads matching .nc files', async ({ 
 })
 
 test('CAM errors on any sheet block every download and are listed per sheet', async ({ page }) => {
-  await page.getByRole('tab', { name: 'CAM' }).click()
+  await openSection(page, 'CAM / CNC')
   const tableX = page.getByLabel('Table X')
   await tableX.fill('1000')
   await tableX.press('Enter')
@@ -56,13 +39,15 @@ test('CAM errors on any sheet block every download and are listed per sheet', as
   expect(downloads).toBe(0)
 })
 
-test('machine settings keep drills off profile/dado and flag duplicate tool numbers', async ({ page }) => {
-  await page.getByRole('tab', { name: 'CAM' }).click()
+test('tooling keeps drills off profile/dado and flags duplicate tool numbers', async ({ page }) => {
+  await openSection(page, 'CAM / CNC')
+  await openCard(page, 'Tooling')
   await expect(page.getByLabel('Profile tool').locator('option')).toHaveText([/^T1 /, /^T2 /])
   await expect(page.getByLabel('Dado tool').locator('option')).toHaveText([/^T1 /, /^T2 /])
   await expect(page.getByLabel('Drill tool').locator('option')).toHaveCount(3)
   await expect(page.getByLabel('Edge inset')).toHaveCount(0)
 
+  await page.getByRole('button', { name: /^T3 · / }).click()
   const number = page.getByLabel('T3 number')
   await number.fill('1')
   await number.press('Enter')
@@ -71,7 +56,7 @@ test('machine settings keep drills off profile/dado and flag duplicate tool numb
 })
 
 test('importing a project with a runaway step down is rejected with its path', async ({ page }) => {
-  const project = await exportedProject(page)
+  const { project } = await exportedProject(page)
   project.name = 'Runaway'
   project.tools[0]!.stepDown = 0.001
   await importProject(page, project)
@@ -80,11 +65,11 @@ test('importing a project with a runaway step down is rejected with its path', a
 })
 
 test('side mount is offered only with side-mount slides in the catalog', async ({ page }) => {
-  const project = await exportedProject(page)
+  const { project } = await exportedProject(page)
   const undermountOnly = project.hardware.filter((h) => h.kind !== 'slide' || h.props.mount === 0)
   await importProject(page, { ...project, name: 'Undermount only', hardware: undermountOnly })
   await expect(page.getByLabel('Project name')).toHaveValue('Undermount only')
-  await page.locator('summary', { hasText: /^Drawers$/ }).click()
+  await openCard(page, 'Drawers')
   const mount = page.getByLabel('Slide mount')
   await expect(mount.locator('option[value="side-mount"]')).toBeDisabled()
 
@@ -94,7 +79,6 @@ test('side mount is offered only with side-mount slides in the catalog', async (
   await expect(mount.locator('option[value="side-mount"]')).toBeEnabled()
   await mount.selectOption('side-mount')
 
-  await page.locator('summary', { hasText: /^Hardware$/ }).click()
   const slide = page.getByLabel('Slide', { exact: true })
   await expect(slide).toHaveValue('side-457')
   await expect(slide.locator('option')).toHaveText(['Side-mount slide 457 mm (pair) (Generic SIDE-457)'])
