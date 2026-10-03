@@ -10,5 +10,5 @@ export function overallYield(sheets: readonly Sheet[]): number {
 
 /** `position` is 1-based across all sheets (matches the `.nc` file number). */
 export function sheetLabel(project: Project, sheet: Sheet, position: number): string {
-  return `Sheet ${position} — ${materialName(project, sheet.materialId)} #${sheet.index + 1}`
+  return `Sheet ${position} — ${materialName(project, sheet.materialId)} #${sheet.index}`
 }

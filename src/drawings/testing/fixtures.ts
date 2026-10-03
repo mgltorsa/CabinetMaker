@@ -116,7 +116,7 @@ export function fixturePartsById(parts: readonly Part[] = fixtureParts()): Reado
   return new Map(parts.map((p) => [p.id, p]))
 }
 
-export function fixtureSheet(parts: readonly Part[] = fixtureParts(), materialId = 'ply-18', index = 0): Sheet {
+export function fixtureSheet(parts: readonly Part[] = fixtureParts(), materialId = 'ply-18', index = 1): Sheet {
   const kerf = 6.35
   const cursor = { x: 10, y: 10, rowHeight: 0 }
   const placements: Placement[] = parts
@@ -186,7 +186,7 @@ export function fixtureResult(parts: readonly Part[] = fixtureParts()): Pipeline
     warnings: [],
   }))
   const build: ProjectBuild = { cabinets, parts: [...parts], hardware: [], warnings: [] }
-  const sheets = ['ply-18', 'mdf-18', 'bb-12', 'ply-6'].map((m, i) => fixtureSheet(parts, m, i)).filter((s) => s.placements.length > 0)
+  const sheets = ['ply-18', 'mdf-18', 'bb-12', 'ply-6'].map((m, i) => fixtureSheet(parts, m, i + 1)).filter((s) => s.placements.length > 0)
   const nest: NestResult = { sheets, linearPartIds: [], unplaced: [], summary: [] }
   const bom = fixtureBom(parts)
   return { build, partsById: fixturePartsById(parts), nest, bom, estimate: fixtureEstimate(bom) }

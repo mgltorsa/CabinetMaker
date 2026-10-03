@@ -69,7 +69,7 @@ function sheetShapes(sheet: Sheet, parts: ReadonlyMap<string, Part>, units: Unit
   shapes.push(dim(0, 0, 0, W, style.dimSpacing, fmt(W)))
   const material = options.materialName ?? sheet.materialId
   const yieldPct = Number.isFinite(sheet.yield) ? (sheet.yield * 100).toFixed(1) : '0.0'
-  const title = `Sheet ${sheet.index + 1} · ${material} · ${lengthWithUnit(sheet.thickness, units)} · ${sheet.placements.length} parts · yield ${yieldPct} %`
+  const title = `Sheet ${sheet.index} · ${material} · ${lengthWithUnit(sheet.thickness, units)} · ${sheet.placements.length} parts · yield ${yieldPct} %`
   shapes.push(text(0, W + style.textSize * 0.8, title, style.textSize))
   const grained = options.grained ?? sheet.placements.some((p) => (parts.get(p.partId)?.grain ?? 'none') !== 'none')
   if (grained) {
@@ -83,7 +83,7 @@ function sheetShapes(sheet: Sheet, parts: ReadonlyMap<string, Part>, units: Unit
 
 export function sheetLayout(sheet: Sheet, parts: ReadonlyMap<string, Part>, units: UnitSystem, options: SheetLayoutOptions = {}): Drawing {
   const extent = Math.max(sheet.length, sheet.width, 1)
-  return makeDrawing(`${sheet.id}:layout`, `Sheet ${sheet.index + 1} (${sheet.id})`, extent, units, (style) =>
+  return makeDrawing(`${sheet.id}:layout`, `Sheet ${sheet.index} (${sheet.id})`, extent, units, (style) =>
     sheetShapes(sheet, parts, units, style, options),
   )
 }

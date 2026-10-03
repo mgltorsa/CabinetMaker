@@ -122,7 +122,16 @@ export function CutPlanView({ project, result }: CutPlanViewProps) {
             <p className="hint">
               {lengthLabel(sheet.length, units)} × {lengthLabel(sheet.width, units)} · {sheet.placements.length} parts · yield {percent(sheet.yield)}
             </p>
-            <DrawingView make={() => sheetLayout(sheet, partsById, units)} units={units} label={`Layout of ${sheetLabel(project, sheet, i + 1)}`} />
+            <DrawingView
+              make={() => {
+                const material = project.materials.find((m) => m.id === sheet.materialId)
+                return sheetLayout(sheet, partsById, units, {
+                  edgeTrim: project.nest.edgeTrim,
+                  materialName: materialName(project, sheet.materialId),
+                  grained: material?.kind === 'sheet' ? material.grained : undefined,
+                })
+              }}
+              units={units} label={`Layout of ${sheetLabel(project, sheet, i + 1)}`} />
           </section>
         ))
       )}

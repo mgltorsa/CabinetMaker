@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { fixtureProject } from '@/core/fixtures'
 import type { Project } from '@/core/types'
 import { emitGcode, generateToolpaths, parseGcode } from '@/cam'
+import { sheetLayout } from '@/drawings'
 import { buildPlanPdf, planPageCount } from '@/drawings/pdf'
 import { validateBuild } from '@/engine/validate'
 import { createPreset, PRESETS } from '@/engine/presets'
@@ -71,6 +72,15 @@ describe.each(projectsUnderTest().map((p) => [p.cabinets.length, p] as const))('
         })
       })
     }
+  })
+
+  it('numbers sheet layouts from 1 per material, matching sheet ids', () => {
+    for (const sheet of nest.sheets) {
+      expect(sheet.id).toBe(`${sheet.materialId}#${sheet.index}`)
+      expect(sheetLayout(sheet, partsById, project.units).title).toBe(`Sheet ${sheet.index} (${sheet.id})`)
+    }
+    const firsts = nest.sheets.filter((s) => s.index === 1).map((s) => s.materialId)
+    expect(new Set(firsts)).toEqual(new Set(nest.sheets.map((s) => s.materialId)))
   })
 
   it('renders a PDF whose page count matches the plan', async () => {
