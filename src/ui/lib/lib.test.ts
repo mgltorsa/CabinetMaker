@@ -17,12 +17,13 @@ describe('field parsing', () => {
   })
 
   it('rejects garbage and out-of-range values without producing NaN', () => {
-    for (const text of ['', 'abc', 'NaN', '1/0', '12mm']) {
+    for (const text of ['', 'abc', 'NaN', '1/0', '12 furlongs']) {
       const r = parseLengthField(text, text === '1/0' ? 'imperial' : 'metric')
       expect(r.ok).toBe(false)
     }
     expect(parseLengthField('-5', 'metric', { min: 0 })).toEqual({ ok: false, error: 'Must be at least 0' })
     expect(parseLengthField('5000', 'metric', { max: 3000 }).ok).toBe(false)
+    expect(parseLengthField('12mm', 'metric')).toEqual({ ok: true, value: 12 })
   })
 
   it('treats an empty optional length as auto', () => {
@@ -178,5 +179,34 @@ describe('3D scene', () => {
 
   it('handles an empty build', () => {
     expect(buildScene(buildOf([]), [], DEFAULT_VIEW, opts).meshes).toEqual([])
+  })
+})
+
+describe('3D dimension lines', () => {
+  it('measure exactly what their labels say, even with a countertop overhang', () => {
+    const project = fixtureProject()
+    const cab = project.cabinets[0]!
+    cab.top = { kind: 'countertop', materialId: null, thickness: 30, overhangFront: 25, overhangSides: 20 }
+    const scene = buildScene(buildProject(project), project.cabinets, DEFAULT_VIEW, { units: 'metric', selectedCabinetId: cab.id })
+    const length = (id: string): number => {
+      const d = scene.dimensions.find((x) => x.id === id)!
+      return Math.hypot(d.to[0] - d.from[0], d.to[1] - d.from[1], d.to[2] - d.from[2]) * 1000
+    }
+    expect(length('width')).toBeCloseTo(cab.width, 6)
+    expect(length('height')).toBeCloseTo(cab.height, 6)
+    expect(length('depth')).toBeCloseTo(cab.depth, 6)
+  })
+})
+
+describe('3D supplied countertop', () => {
+  it('shows a countertop that is supplied separately (not cut), and hides it with the Top pill', () => {
+    const project = fixtureProject()
+    project.cabinets[0]!.top = { kind: 'countertop', materialId: null, thickness: 30, overhangFront: 25, overhangSides: 0 }
+    const build = buildProject(project)
+    expect(build.parts.some((p) => p.group === 'top')).toBe(false)
+    const opts = { units: 'metric' as const, selectedCabinetId: 'cab_1' }
+    const shown = buildScene(build, project.cabinets, DEFAULT_VIEW, opts)
+    expect(shown.meshes.some((m) => m.finish === 'top')).toBe(true)
+    expect(buildScene(build, project.cabinets, { ...DEFAULT_VIEW, top: false }, opts).meshes.some((m) => m.finish === 'top')).toBe(false)
   })
 })

@@ -6,6 +6,7 @@ import type { Cabinet, CabinetBuild, Drawing, Mm, Part, PartGroup, Shape, UnitSy
 import { formatLength } from '@/core/units'
 import { makeDrawing } from './bounds'
 import { hingeSide, isDoor, project, pullPoints, union } from './part-geometry'
+import { floorLine, horizontalDims, mountingNote, verticalDims } from './envelope-dims'
 import { circle, dim, line, rect, type Range2 } from './shapes'
 import { FILL_FRONT, type DrawingStyle } from './style'
 
@@ -90,6 +91,26 @@ function pullMarks(part: Part, cabinet: Cabinet, style: DrawingStyle): Shape[] {
   return [line(x, ya, x, ya + len, 'outline')]
 }
 
+/**
+ * Fronts grouped into side-by-side columns (fronts whose x ranges overlap),
+ * left to right. A height chain is only meaningful within one column: chaining
+ * a door beside a drawer stack would overprint the labels.
+ */
+export function frontColumns(fronts: readonly Part[]): Part[][] {
+  const sorted = [...fronts].sort((a, b) => a.bounds.min.x - b.bounds.min.x)
+  const columns: { x1: Mm; parts: Part[] }[] = []
+  for (const f of sorted) {
+    const last = columns.at(-1)
+    if (last && f.bounds.min.x < last.x1 - EPS) {
+      last.parts.push(f)
+      last.x1 = Math.max(last.x1, f.bounds.max.x)
+    } else {
+      columns.push({ x1: f.bounds.max.x, parts: [f] })
+    }
+  }
+  return columns.map((c) => c.parts)
+}
+
 /** Distinct front height intervals (plus toe kick) bottom to top. */
 function heightChain(fronts: readonly Part[], kickHeight: Mm): Array<[Mm, Mm]> {
   const spans: Array<[Mm, Mm]> = fronts.map((f) => [f.bounds.min.y, f.bounds.max.y])
@@ -117,7 +138,7 @@ function frontShapes(cabinet: Cabinet, parts: readonly Part[], units: UnitSystem
   const gap = style.dimSpacing
 
   const shapes: Shape[] = [
-    line(box.x0 - gap, 0, box.x1 + gap, 0, 'hatch'),
+    ...floorLine(cabinet.floorHeight, box.x0 - gap, box.x1 + gap),
     ...shelves.map((p) => rect(xy(p), 'hidden')),
     ...visible.map((p) => rect(xy(p), 'outline')),
     rect(union(visible.map(xy)) ?? box, 'outline'),
@@ -129,9 +150,24 @@ function frontShapes(cabinet: Cabinet, parts: readonly Part[], units: UnitSystem
   })
 
   const kick = toeKickHeight(cabinet, parts)
-  shapes.push(dim(box.x0, box.y0, box.x1, box.y0, -gap * 1.5, fmt(box.x1 - box.x0)))
-  shapes.push(dim(box.x0, box.y0, box.x0, box.y1, gap * 1.5, fmt(box.y1 - box.y0)))
-  heightChain(fronts, kick).forEach(([y0, y1]) => shapes.push(dim(box.x1, y0, box.x1, y1, -gap, fmt(y1 - y0))))
+  // Primary dims state the cabinet box as entered; projections get an "overall" dim.
+  const cab = { x0: 0, x1: cabinet.width, y0: cabinet.floorHeight, y1: cabinet.floorHeight + cabinet.height }
+  shapes.push(...horizontalDims({ lo: cab.x0, hi: cab.x1 }, { lo: box.x0, hi: box.x1 }, cab.y0, gap, fmt))
+  shapes.push(...verticalDims({ lo: cab.y0, hi: cab.y1 }, box.y1, Math.min(box.x0, cab.x0), gap, fmt))
+  shapes.push(...mountingNote(cabinet.floorHeight, Math.min(box.x0, cab.x0), cab.y0 - gap * 4, style.textSize, fmt))
+  // One chain per outer column: rightmost on the right, leftmost (if its fronts differ) outside the left dims.
+  const columns = frontColumns(fronts)
+  const right = columns.at(-1) ?? []
+  const left = columns.length > 1 ? (columns[0] ?? []) : []
+  const rightChain = heightChain(right, kick)
+  rightChain.forEach(([y0, y1]) => shapes.push(dim(box.x1, y0, box.x1, y1, -gap, fmt(y1 - y0))))
+  const leftChain = heightChain(left, kick)
+  const sameAsRight = leftChain.length === rightChain.length && leftChain.every((s, i) => Math.abs(s[0] - rightChain[i]![0]) < EPS && Math.abs(s[1] - rightChain[i]![1]) < EPS)
+  if (leftChain.length > 0 && !sameAsRight) {
+    const x = Math.min(box.x0, cab.x0)
+    const outer = box.y1 > cab.y1 + EPS ? 4.1 : 2.8
+    leftChain.forEach(([y0, y1]) => shapes.push(dim(x, y0, x, y1, gap * outer, fmt(y1 - y0))))
+  }
   return shapes
 }
 

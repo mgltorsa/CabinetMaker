@@ -9,6 +9,7 @@
 import { panelToCabinet } from '@/core/panel'
 import type { Cabinet, HoleOp, Part, PartGroup, ProjectBuild, SignedAxis, UnitSystem } from '@/core/types'
 import { formatLength } from '@/core/units'
+import { synthesizedTop } from '@/drawings/front-elevation'
 import { hingeSide } from '@/drawings/part-geometry'
 import type { ViewToggles } from '../store'
 
@@ -204,7 +205,13 @@ const pullHoles = (part: Part): HoleOp[] => part.ops.filter((o): o is HoleOp => 
 export function buildScene(build: ProjectBuild, cabinets: readonly Cabinet[], view: ViewToggles, options: SceneOptions): SceneSpec {
   const offsets = runOffsets(cabinets)
   const cabinetById = new Map(cabinets.map((c) => [c.id, c]))
-  const visible = build.parts.filter((p) => isPartVisible(p, view))
+  // Countertops supplied separately are not cut parts, but they belong in the picture
+  // (same geometry the drawings use).
+  const supplied = cabinets.flatMap((c) => {
+    const top = synthesizedTop(c, build.parts.filter((p) => p.cabinetId === c.id))
+    return top ? [top] : []
+  })
+  const visible = [...build.parts, ...supplied].filter((p) => isPartVisible(p, view))
   if (visible.length === 0) return { meshes: [], pulls: [], pinHoles: [], dimensions: [], extent: 1, target: [0, 0.4, 0] }
 
   // World (mm) before centring: cabinet space + run offset.
@@ -286,12 +293,14 @@ function cabinetDimensions(
   const parts = build.parts.filter((p) => p.cabinetId === cabinet?.id)
   if (!cabinet || parts.length === 0) return []
   const dx = offsets.get(cabinet.id) ?? 0
-  const x0 = Math.min(...parts.map((p) => p.bounds.min.x)) + dx
-  const x1 = Math.max(...parts.map((p) => p.bounds.max.x)) + dx
-  const y0 = Math.min(...parts.map((p) => p.bounds.min.y))
-  const y1 = Math.max(...parts.map((p) => p.bounds.max.y))
-  const z0 = Math.min(...parts.map((p) => p.bounds.min.z))
-  const z1 = Math.max(...parts.map((p) => p.bounds.max.z))
+  // Lines sit on the nominal envelope the labels state (W × H × D), not on the
+  // parts' bounding box, which countertop overhangs and overlay fronts enlarge.
+  const x0 = dx
+  const x1 = dx + cabinet.width
+  const y0 = cabinet.floorHeight
+  const y1 = cabinet.floorHeight + cabinet.height
+  const z0 = 0
+  const z1 = cabinet.depth
   const o = DIM_OFFSET_MM
   const e = DIM_OVERSHOOT_MM
   const fmt = (v: number): string => formatLength(v, options.units)

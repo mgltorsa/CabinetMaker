@@ -24,8 +24,9 @@ function gcd(a: number, b: number): number {
 
 /** Format inches as a mixed fraction to the nearest 1/`denominator`, e.g. `23 5/8"`. */
 export function formatFractionalInches(inches: number, denominator = 16): string {
-  const sign = inches < 0 ? '-' : ''
   const total = Math.round(Math.abs(inches) * denominator)
+  if (total === 0) return '0"' // never "-0"
+  const sign = inches < 0 ? '-' : ''
   const whole = Math.floor(total / denominator)
   const num = total % denominator
   if (num === 0) return `${sign}${whole}"`
@@ -40,22 +41,39 @@ export function formatLength(mm: Mm, units: UnitSystem): string {
   return `${round(mm, 1)}`
 }
 
+/** Millimetres per unit for explicit unit suffixes. */
+const MM_PER_UNIT: Record<string, number> = { mm: 1, cm: 10, m: 1000, in: MM_PER_INCH, '"': MM_PER_INCH, ft: 12 * MM_PER_INCH, "'": 12 * MM_PER_INCH }
+
+const NUMBER = String.raw`(?:\d+(?:\.\d*)?|\.\d+)`
+/** `600`, `600mm`, `60 cm`, `1.2m`, `-5` (a decimal comma is accepted). */
+const METRIC_RE = new RegExp(`^([+-]?${NUMBER})\\s*(mm|cm|m)?$`)
+/** Optional feet, then whole / decimal inches and/or a fraction: `2' 6 1/2"`, `23-5/8`, `.5in`. */
+const IMPERIAL_RE = new RegExp(`^(?:(${NUMBER})\\s*(?:'|ft)\\s*-?\\s*)?(?:(${NUMBER})(?:\\s*-\\s*|\\s+)?)?(?:(\\d+)\\/(\\d+))?\\s*(?:"|in)?$`)
+
 /**
- * Parse user input into mm. Metric: plain number (mm). Imperial: inches with
- * optional fraction (`23 5/8`, `23-5/8`, `5/8`, `23.625`, trailing `"` allowed).
- * Returns `null` when the text is not a valid length.
+ * Parse user input into mm. Accepts the project's units by default and any
+ * explicit unit: metric `600`, `600 mm`, `60cm`, `1,5`; imperial `23 5/8`,
+ * `23-5/8"`, `.5`, `24in`, `2' 6"`. Returns `null` when the text is not a
+ * valid length.
  */
 export function parseLength(text: string, units: UnitSystem): Mm | null {
-  const t = text.trim().replace(/"$/, '').trim()
+  const t = text.trim().toLowerCase().replace(/[″”]/g, '"').replace(/[′’]/g, "'")
   if (t === '') return null
-  if (units === 'metric') {
-    const n = Number(t)
-    return Number.isFinite(n) ? n : null
+  // Decimal comma ("1,5") when there is no decimal point.
+  const normalized = t.includes('.') ? t : t.replace(/^([+-]?\d+),(\d+)/, '$1.$2')
+
+  const metric = METRIC_RE.exec(normalized)
+  if (metric && (metric[2] !== undefined || units === 'metric')) {
+    const value = Number(metric[1])
+    return Number.isFinite(value) ? value * (MM_PER_UNIT[metric[2] ?? 'mm'] ?? 1) : null
   }
-  const m = /^(\d+(?:\.\d+)?)?(?:[\s-]+)?(?:(\d+)\/(\d+))?$/.exec(t)
-  if (!m || (m[1] === undefined && m[2] === undefined)) return null
-  const whole = m[1] !== undefined ? Number(m[1]) : 0
-  const frac = m[2] !== undefined && m[3] !== undefined ? Number(m[2]) / Number(m[3]) : 0
-  if (m[3] !== undefined && Number(m[3]) === 0) return null
-  return inchesToMm(whole + frac)
+
+  const imperial = IMPERIAL_RE.exec(normalized)
+  const hasImperialMark = /['"]|in$|ft/.test(normalized) || normalized.includes('/')
+  if (!imperial || (units === 'metric' && !hasImperialMark)) return null
+  const [, feet, inches, num, den] = imperial
+  if (feet === undefined && inches === undefined && num === undefined) return null
+  if (den !== undefined && Number(den) === 0) return null
+  const total = (feet !== undefined ? Number(feet) * 12 : 0) + (inches !== undefined ? Number(inches) : 0) + (num !== undefined && den !== undefined ? Number(num) / Number(den) : 0)
+  return Number.isFinite(total) ? inchesToMm(total) : null
 }
