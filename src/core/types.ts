@@ -447,6 +447,8 @@ export interface Part {
   /** Which cabinet axis each panel axis maps to. */
   axes: { length: Axis; width: Axis; thickness: Axis }
   ops: Op[]
+  /** Signed panel-space orientation in cabinet space (set by the engine). */
+  frame?: PanelFrame
 }
 
 export interface HardwareUsage {
@@ -633,4 +635,21 @@ export interface Drawing {
   /** Model-space extents (mm). */
   bounds: { minX: Mm; minY: Mm; maxX: Mm; maxY: Mm }
   shapes: Shape[]
+}
+
+// ─── Panel frame (engine) ───────────────────────────────────────────────────
+
+/** A signed cabinet-space direction. */
+export type SignedAxis = '+x' | '-x' | '+y' | '-y' | '+z' | '-z'
+
+/**
+ * Orientation of a part's panel space in cabinet space. Panel +x (length),
+ * +y (width) and +z (face A normal) point along these cabinet directions.
+ * Panel (0, 0, 0) is the corner of `bounds` from which all three run, and the
+ * frame is right-handed (x × y = z), so face A seen from outside is not mirrored.
+ */
+export interface PanelFrame {
+  x: SignedAxis
+  y: SignedAxis
+  z: SignedAxis
 }
