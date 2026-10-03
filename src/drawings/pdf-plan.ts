@@ -105,7 +105,7 @@ function sheetPages(project: Project, result: PipelineResult): PlanPage[] {
   return result.nest.sheets.map((sheet) => {
     const material = project.materials.find((m) => m.id === sheet.materialId)
     const drawing = sheetLayout(sheet, result.partsById, project.units, {
-      edgeTrim: project.nest.edgeTrim,
+      edgeTrim: (result.nestSettings ?? project.nest).edgeTrim,
       materialName: material?.name ?? sheet.materialId,
       grained: material?.kind === 'sheet' ? material.grained : undefined,
     })
