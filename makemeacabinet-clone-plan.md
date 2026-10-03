@@ -162,3 +162,75 @@ Factory posts (Homag, Biesse drill blocks), barcodes, ERP, edgebander control, p
 ## Screens from the live app (3 Oct 2026)
 
 Captured during the walk: marketing home, about, designer start, 3D cabinet, panel details, CAM toolpaths. Paths are local to the research session; the written inventory above is the record.
+
+---
+
+## Engineering review and revisions (3 Oct 2026)
+
+The product research above holds up. What it lacked was the engineering contract needed to build it in parallel without the "UI and cut list disagree" bug class. Changes, in order of impact:
+
+### 1. One derivation pipeline, enforced in code
+
+The plan says "one cabinet document regenerates everything". Made concrete as `src/pipeline`:
+
+```
+Project ─engine→ ProjectBuild ─nest→ NestResult ─cam→ Toolpath[] ─→ G-code
+                      │                 └─estimate→ Bom, Estimate
+                      └─drawings→ Drawing ─→ SVG (screen) and PDF (plan book)
+```
+
+Every view reads the same `PipelineResult`. Only `Project` is persisted. Cross-module **invariant tests** replace the hand-written "done" checks: every sheet-material part is placed exactly once; BOM sheet counts equal nest sheet counts; PDF page count = cover + elevations + panel pages + sheets + BOM; parsed G-code polylines equal the preview polylines.
+
+### 2. Explicit units and coordinate frames
+
+Missing from the plan and the usual source of cabinet-software bugs. Decided:
+
+- **mm everywhere** internally; imperial is input/display only (fractions to 1/16").
+- **Cabinet space** origin at left/floor/back, +X right, +Y up, +Z front (three.js Y-up).
+- **Panel space** x = length (grain), y = width, face A up on the CNC.
+- **Sheet/machine space** x along sheet length, Z = 0 at top of stock.
+
+### 3. Data model gaps filled (`src/core/types.ts`)
+
+- **Opening layout**: `Cabinet.sections[]` (columns split by dividers) each holding `bays[]` (drawer | door | open, fixed or shared height). The plan had "openings" but no structure.
+- **Ops carry a `face`**. A 3-axis flatbed router can only reach face A. Edge bores (dowels, some Domino positions) and face-B ops are reported as **manual ops**, not silently dropped or (worse) cut on the wrong face.
+- **Material** carries sheet size, grain, cost; **linear stock** is its own kind (face frames) and is not nested.
+- `Project.schemaVersion` from day one so saved files can migrate.
+- `Cabinet.placement` and `Project.room` exist now (nullable) so P6 does not force a model rewrite.
+
+### 4. Drawings: one neutral model, two renderers
+
+The plan said "PDF from the same SVG/parts model". Tightened: drawings produce a neutral `Drawing` (lines, rects, circles, text, dims in mm). SVG and PDF (pdf-lib) render that one model, so screen and plan book cannot drift.
+
+### 5. Nest algorithm named
+
+"Router nest" is now **MaxRects (best-short-side-fit)** per material, grain-constrained rotation, kerf + tool spacing, multiple sort heuristics, keep best yield. Not a true optimizer (NP-hard); the UI must not call it "optimal". Guillotine/panel-saw mode stays out of scope.
+
+### 6. CAM made verifiable
+
+- Dialect: conservative G-code subset (G0/G1, G17, G21, G90, M3/M5, M6 Tn, F/S). No arcs until a simulator is in place.
+- Order per sheet: drills → dados/pockets → part profiles (small parts first), tabs on the final profile pass or an onion skin.
+- A G-code **parser** ships with the emitter and the tests round-trip preview ↔ `.nc`.
+- Every file starts with a comment banner: preview code, simulate before running. G20 stays "coming soon".
+
+### 7. Hardware rules are data with sources
+
+Slide length selection, drawer-box clearances and hinge boring come from published manufacturer specs and live as named constants with a source comment and "verify" note, not magic numbers. Catalog SKUs in `src/core/defaults.ts` are examples; the shop overrides cost and SKU.
+
+### 8. Local-first, static export
+
+No backend until P7: Next.js `output: 'export'`, project autosaved to `localStorage`, JSON import/export. Deployable anywhere, works offline, and matches "designer works without an account".
+
+### 9. Phase scope for the first build
+
+This round implements P0–P5 at reasonable depth in one app: engine (frameless + face frame, drawers, doors, shelves, toe kick, stretchers, nailers, countertop), nest, PDF, CAM preview, estimate, plus presets (P8-lite) because a preset is just a `Cabinet` value. P6 room and P7 accounts are deferred; the data model already reserves room for them.
+
+### 10. Quality gates
+
+TypeScript strict + `noUncheckedIndexedAccess`, ESLint (next), Vitest unit and invariant tests, Playwright smoke test, `pnpm verify` = typecheck + lint + test + build. Engine rules are tested against hand-computed cabinets (e.g. a 600 × 720 × 560 box with 18 mm sides has a 564 mm bottom).
+
+### Suggestions not taken (yet)
+
+- **Web worker for the pipeline**: only needed once rooms have dozens of cabinets; the pipeline is pure so moving it is cheap later.
+- **Undo/redo**: easy with immutable `Project` snapshots; add once the editor settles.
+- **Hosted analytics**: optional, not product.
