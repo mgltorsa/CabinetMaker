@@ -72,7 +72,7 @@ export function PartsView({ project, result }: PartsViewProps) {
           <h3 id="panel-detail-heading" className="view-title">
             Panel detail — {selectedPart.name}
           </h3>
-          <DrawingView make={() => panelDetail(selectedPart, units)} units={units} label={`${selectedPart.name} panel detail`} />
+          <DrawingView make={() => panelDetail(selectedPart, units, { materialName: materialName(project, selectedPart.materialId) })} units={units} label={`${selectedPart.name} panel detail`} />
         </section>
       )}
     </div>
