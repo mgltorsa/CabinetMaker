@@ -1,60 +1,87 @@
 /**
  * Construction engine: Project → parts, ops, hardware. Pure functions, no UI.
  *
- * Bootstrap (P0) implementation: frameless carcass, captured back, adjustable
- * shelves. The engine work stream replaces this with the full rules engine.
+ * Rule order per cabinet: materials → dims (feasibility) → layout (sections,
+ * bays, fronts) → carcass → back → toe kick → face frame → doors → drawers →
+ * shelves → top. Rules return parts plus ops placed in cabinet space; ops are
+ * attached (panel space, deterministic ids) at the end. Impossible inputs
+ * produce `BuildWarning`s, never exceptions.
+ *
+ * Face A convention: each part's face A is the face that receives most of its
+ * ops — the inside face of sides, dividers, doors and drawer fronts, the top
+ * face of bottoms/shelves/partitions, the underside of tops and stretchers.
+ * Part ids are `${cabinetId}:${role}`; op ids `${partId}#${purpose}-${n}`.
  */
-import type { Cabinet, CabinetBuild, Material, Part, Project, ProjectBuild } from '@/core/types'
-import { box, makePart } from './geometry'
+import { DEFAULT_HARDWARE } from '@/core/defaults'
+import type { Cabinet, CabinetBuild, HardwareItem, Material, Project, ProjectBuild } from '@/core/types'
+import { buildBack } from './back'
+import { buildCarcass } from './carcass'
+import { mergeResults, resolveMaterials, warning, type BuildContext } from './context'
+import { computeDims } from './dims'
+import { buildDoors } from './doors'
+import { buildDrawers } from './drawers'
+import { buildFaceFrame } from './faceFrame'
+import { aggregateHardware } from './hardware'
+import { resolveFasteners } from './joinery'
+import { computeLayout } from './layout'
+import { attachOps } from './ops'
+import { buildShelves } from './shelves'
+import { buildToeKick } from './toeKick'
+import { buildTop } from './top'
+
+export { validateBuild } from './validate'
+export { PRESETS, createPreset, type PresetInfo } from './presets'
 
 export interface EngineContext {
   materials: Material[]
-}
-
-function thicknessOf(ctx: EngineContext, materialId: string): number {
-  const m = ctx.materials.find((mat) => mat.id === materialId)
-  if (!m) throw new Error(`Unknown material ${materialId}`)
-  return m.thickness
+  /** Hardware catalog (slides, hinges, pulls…). Defaults to the starter catalog. */
+  hardware?: HardwareItem[]
 }
 
 export function buildCabinet(cabinet: Cabinet, ctx: EngineContext): CabinetBuild {
-  const { id, width: W, height: H, depth: D, construction: c } = cabinet
-  const t = thicknessOf(ctx, c.carcassMaterialId)
-  const bt = thicknessOf(ctx, c.backMaterialId)
-  const g = c.back.construction === 'captured' ? c.back.grooveDepth : 0
-  const y0 = c.toeKick.type === 'none' ? 0 : c.toeKick.height
-  const base = { cabinetId: id, thickness: t, grain: 'length' as const, materialId: c.carcassMaterialId }
-  const parts: Part[] = [
-    makePart({ ...base, role: 'side-left', name: 'Left side', group: 'carcass', bounds: box(0, t, y0, H, 0, D), lengthAxis: 'y', thicknessAxis: 'x' }),
-    makePart({ ...base, role: 'side-right', name: 'Right side', group: 'carcass', bounds: box(W - t, W, y0, H, 0, D), lengthAxis: 'y', thicknessAxis: 'x' }),
-    makePart({ ...base, role: 'bottom', name: 'Bottom', group: 'carcass', bounds: box(t, W - t, y0, y0 + t, 0, D), lengthAxis: 'x', thicknessAxis: 'y' }),
-    makePart({ ...base, role: 'top', name: 'Top', group: 'carcass', bounds: box(t, W - t, H - t, H, 0, D), lengthAxis: 'x', thicknessAxis: 'y' }),
-    makePart({
-      ...base,
-      thickness: bt,
-      materialId: c.backMaterialId,
-      role: 'back',
-      name: 'Back',
-      group: 'back',
-      bounds: box(t - g, W - t + g, y0 + t - g, H - t + g, c.back.inset, c.back.inset + bt),
-      lengthAxis: 'y',
-      thicknessAxis: 'z',
-    }),
-  ]
-  const shelfCount = cabinet.sections.flatMap((s) => s.bays).reduce((n, b) => n + (b.kind === 'drawer' ? 0 : b.shelfCount), 0)
-  const interiorBottom = y0 + t
-  const interiorHeight = H - t - interiorBottom
-  for (let i = 0; i < shelfCount; i++) {
-    const y = interiorBottom + ((i + 1) * interiorHeight) / (shelfCount + 1) - t / 2
-    parts.push(
-      makePart({ ...base, role: `shelf-${i + 1}`, name: `Shelf ${i + 1}`, group: 'shelf', bounds: box(t + 1, W - t - 1, y, y + t, c.back.inset + bt, D - 2), lengthAxis: 'x', thicknessAxis: 'y' }),
-    )
+  try {
+    return buildCabinetUnsafe(cabinet, ctx)
+  } catch (error: unknown) {
+    // Last-resort guard so one bad cabinet never takes down every view.
+    const message = error instanceof Error ? error.message : 'unexpected error'
+    return { cabinetId: cabinet.id, parts: [], hardware: [], warnings: [warning(cabinet.id, 'error', 'engine-failure', `Engine failed: ${message}`)] }
   }
-  return { cabinetId: id, parts, hardware: [], warnings: [] }
+}
+
+function buildCabinetUnsafe(cabinet: Cabinet, ctx: EngineContext): CabinetBuild {
+  const empty = { cabinetId: cabinet.id, parts: [], hardware: [] }
+  const resolved = resolveMaterials(cabinet, ctx.materials)
+  if (!resolved.ok) return { ...empty, warnings: resolved.warnings }
+  const dimsResult = computeDims(cabinet, resolved.mats)
+  if (dimsResult.fatal) return { ...empty, warnings: dimsResult.warnings }
+  const { layout, warnings: layoutWarnings } = computeLayout(cabinet, dimsResult.dims)
+  const catalog = ctx.hardware ?? DEFAULT_HARDWARE
+  const bctx: BuildContext = { cabinet, materials: ctx.materials, mats: resolved.mats, catalog, dims: dimsResult.dims, layout }
+  const fasteners = resolveFasteners(catalog)
+
+  const carcass = buildCarcass(bctx, fasteners)
+  const body = mergeResults(
+    carcass.result,
+    buildBack(bctx, carcass, fasteners),
+    buildToeKick(bctx),
+    buildFaceFrame(bctx),
+    buildDoors(bctx, carcass.units),
+    buildDrawers(bctx, carcass.units, fasteners),
+    buildShelves(bctx, carcass.units),
+  )
+  const fronts = body.parts.filter((p) => p.group === 'front')
+  const frontFaceZ = fronts.length > 0 ? Math.max(...fronts.map((p) => p.bounds.max.z)) : dimsResult.dims.D + dimsResult.dims.fft
+  const all = mergeResults(body, buildTop(bctx, frontFaceZ))
+  return {
+    cabinetId: cabinet.id,
+    parts: attachOps(all.parts, all.ops),
+    hardware: aggregateHardware(cabinet.id, all.hardware),
+    warnings: [...dimsResult.warnings, ...layoutWarnings, ...all.warnings],
+  }
 }
 
 export function buildProject(project: Project): ProjectBuild {
-  const ctx: EngineContext = { materials: project.materials }
+  const ctx: EngineContext = { materials: project.materials, hardware: project.hardware }
   const cabinets = project.cabinets.map((cab) => buildCabinet(cab, ctx))
   return {
     cabinets,
