@@ -1,9 +1,8 @@
 /**
  * Mapping parts (cabinet space) onto elevation planes, and panel-space ops
- * back to cabinet space. Assumes, like the engine, that each panel axis runs
- * in the positive direction of the cabinet axis it maps to and that face A is
- * on the max side of the thickness axis.
+ * back to cabinet space via the engine's `Part.frame` (see `@/core/panel`).
  */
+import { panelToCabinet as panelPointToCabinet } from '@/core/panel'
 import type { Axis, Cabinet, HoleOp, Mm, Part, Vec3 } from '@/core/types'
 import type { Range2 } from './shapes'
 
@@ -24,14 +23,9 @@ export function union(ranges: readonly Range2[]): Range2 | null {
   }
 }
 
+/** A face-A op point in cabinet space. */
 export function panelToCabinet(part: Part, px: Mm, py: Mm): Vec3 {
-  const p: Vec3 = { x: part.bounds.min.x, y: part.bounds.min.y, z: part.bounds.min.z }
-  return {
-    ...p,
-    [part.axes.length]: part.bounds.min[part.axes.length] + px,
-    [part.axes.width]: part.bounds.min[part.axes.width] + py,
-    [part.axes.thickness]: part.bounds.max[part.axes.thickness],
-  }
+  return panelPointToCabinet(part, px, py)
 }
 
 function label(part: Part): string {

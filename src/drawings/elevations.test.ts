@@ -16,12 +16,12 @@ describe('frontElevation', () => {
     expect(fronts).toContainEqual(expect.objectContaining({ x: 1.5, y: 718.5, w: 597, h: 150 }))
   })
 
-  it('draws door swing lines on the hidden layer from the hinge side', () => {
+  it('draws door swing lines on the hidden layer with the apex at the hinge side', () => {
     const hidden = drawing.shapes.filter((s) => s.type === 'line' && s.layer === 'hidden')
-    // door 1 hinged left (cups near min x): lines start at x = 1.5
-    expect(hidden).toContainEqual(expect.objectContaining({ x1: 1.5, y1: 101.5, x2: 298.5, y2: 408.5 }))
-    // door 2 hinged right (position fallback): lines start at x = 598.5
-    expect(hidden).toContainEqual(expect.objectContaining({ x1: 598.5, y1: 715.5, x2: 301.5 }))
+    // door 1 hinged left (cups near min x): lines meet at x = 1.5
+    expect(hidden).toContainEqual(expect.objectContaining({ x1: 298.5, y1: 101.5, x2: 1.5, y2: 408.5 }))
+    // door 2 hinged right (position fallback): lines meet at x = 598.5
+    expect(hidden).toContainEqual(expect.objectContaining({ x1: 301.5, y1: 715.5, x2: 598.5 }))
   })
 
   it('draws a pull between the drawer front pull holes', () => {
@@ -65,8 +65,8 @@ describe('frontElevation', () => {
     const noPull = frontElevation({ ...cabinet, hardware: { ...cabinet.hardware, pullId: null } }, build, 'metric')
     const outlineLines = (s: Shape[]): number => s.filter((x) => x.type === 'line' && x.layer === 'outline').length
     expect(outlineLines(withPull.shapes)).toBe(outlineLines(noPull.shapes) + 1)
-    // hinge right from the role keyword → swing lines start at x = 600
-    expect(withPull.shapes).toContainEqual(expect.objectContaining({ type: 'line', layer: 'hidden', x1: 600 }))
+    // hinge right from the role keyword → swing lines meet at x = 600
+    expect(withPull.shapes).toContainEqual(expect.objectContaining({ type: 'line', layer: 'hidden', x2: 600 }))
   })
 })
 

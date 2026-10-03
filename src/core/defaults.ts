@@ -21,7 +21,8 @@ import {
 export const DEFAULT_MATERIALS: Material[] = [
   { kind: 'sheet', id: 'ply-18', name: '18 mm plywood', thickness: 18, sheetLength: 2440, sheetWidth: 1220, grained: true, costPerSheet: 85 },
   { kind: 'sheet', id: 'ply-6', name: '6 mm plywood (backs)', thickness: 6, sheetLength: 2440, sheetWidth: 1220, grained: true, costPerSheet: 35 },
-  { kind: 'sheet', id: 'bb-12', name: '12 mm Baltic birch (drawer boxes)', thickness: 12, sheetLength: 1525, sheetWidth: 1525, grained: true, costPerSheet: 75 },
+  // 4×8 rather than the common 5×5 so it fits the default router table (Y 1250).
+  { kind: 'sheet', id: 'bb-12', name: '12 mm Baltic birch 4×8 (drawer boxes)', thickness: 12, sheetLength: 2440, sheetWidth: 1220, grained: true, costPerSheet: 95 },
   { kind: 'sheet', id: 'mdf-18', name: '18 mm MDF (paint-grade fronts)', thickness: 18, sheetLength: 2440, sheetWidth: 1220, grained: false, costPerSheet: 55 },
   { kind: 'linear', id: 'maple-19x63', name: 'Maple 19 × 63 mm (face frames)', thickness: 19, width: 63, stockLength: 2440, costPerMetre: 12 },
 ]

@@ -49,9 +49,10 @@ export function synthesizedTop(cabinet: Cabinet, parts: readonly Part[]): Part |
 function doorSwing(part: Part, cabinet: Cabinet): Shape[] {
   const r = xy(part)
   const midY = (r.y0 + r.y1) / 2
+  // Drafting convention: the triangle's apex points at the hinge side.
   const hingeX = hingeSide(part, cabinet) === 'left' ? r.x0 : r.x1
   const latchX = hingeX === r.x0 ? r.x1 : r.x0
-  return [line(hingeX, r.y0, latchX, midY, 'hidden'), line(hingeX, r.y1, latchX, midY, 'hidden')]
+  return [line(latchX, r.y0, hingeX, midY, 'hidden'), line(latchX, r.y1, hingeX, midY, 'hidden')]
 }
 
 function pullMarks(part: Part, cabinet: Cabinet, style: DrawingStyle): Shape[] {
