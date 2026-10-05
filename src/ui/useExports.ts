@@ -37,6 +37,6 @@ export function useExports(project: Project, result: PipelineResult): Exports {
     },
     downloadProjectJson: () => downloadBlob(serializeProject(project), `${slug}.json`, 'application/json'),
     downloadCutListCsv: () => downloadBlob(partsToCsv(result.bom, project), `${slug}-cut-list.csv`, 'text/csv'),
-    downloadBomCsv: () => downloadBlob(bomToCsv(result.bom, project.estimate.currency), `${slug}-bom.csv`, 'text/csv'),
+    downloadBomCsv: () => downloadBlob(bomToCsv(result.bom, project.estimate.currency, result.estimate), `${slug}-bom.csv`, 'text/csv'),
   }
 }

@@ -278,3 +278,41 @@ describe('designer store: project settings', () => {
     expect(p.estimate.labor.minutesPerPart).toBe(1.5)
   })
 })
+
+describe('designer store: cost drivers', () => {
+  it('edits the hardware catalog and replaces an item a cabinet uses', () => {
+    const { get, cab } = setup()
+    const id = get().addHardwareItem('hinge')
+    expect(id).not.toBeNull()
+    get().updateHardwareItem(id!, { name: 'Soft-close hinge', unitCost: 9 })
+    get().setHardwareProp(id!, 'openingAngle', 155)
+    expect(get().project.hardware.find((h) => h.id === id)).toMatchObject({ name: 'Soft-close hinge', unitCost: 9, props: { openingAngle: 155 } })
+
+    get().deleteHardwareItem('blum-cliptop-110')
+    expect(get().project.hardware.some((h) => h.id === 'blum-cliptop-110')).toBe(true)
+    get().replaceHardwareItem('blum-cliptop-110', id!)
+    expect(get().project.hardware.some((h) => h.id === 'blum-cliptop-110')).toBe(false)
+    expect(cab().hardware.hingeId).toBe(id)
+
+    get().duplicateHardwareItem(id!)
+    const hinges = get().project.hardware.filter((h) => h.kind === 'hinge')
+    expect(hinges).toHaveLength(2)
+    get().deleteHardwareItem(hinges[1]!.id)
+    expect(get().project.hardware.filter((h) => h.kind === 'hinge')).toHaveLength(1)
+    expect(validateProject(get().project)).toBeNull()
+  })
+
+  it('adds, edits and removes extra charges and estimate parameters', () => {
+    const { get } = setup()
+    get().addExtraCharge()
+    const extra = get().project.estimate.extras![0]!
+    get().updateExtraCharge(extra.id, { label: 'Delivery', unitCost: 80 })
+    get().updateEstimate({ taxRate: 0.1, materialMarkup: 0.2, minimumCharge: 500 })
+    const p = get().project
+    expect(p.estimate.extras).toEqual([{ ...extra, label: 'Delivery', unitCost: 80 }])
+    expect(p.estimate).toMatchObject({ taxRate: 0.1, materialMarkup: 0.2, minimumCharge: 500 })
+    expect(validateProject(p)).toBeNull()
+    get().removeExtraCharge(extra.id)
+    expect(get().project.estimate.extras).toEqual([])
+  })
+})

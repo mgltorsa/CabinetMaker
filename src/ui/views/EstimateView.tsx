@@ -1,6 +1,6 @@
 'use client'
 
-import type { BomLine, Project } from '@/core/types'
+import type { BomLine, Estimate, Project } from '@/core/types'
 import type { PipelineResult } from '@/pipeline'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Separator } from '../components/ui/separator'
@@ -52,6 +52,29 @@ function LineTable({ caption, lines, currency, showSku = false }: LineTableProps
   )
 }
 
+const percentLabel = (fraction: number): string => `${Math.round(fraction * 10_000) / 100} %`
+
+/**
+ * Totals column rows down to the pre-tax price and tax; the grand total is
+ * shown below them. Extras, markup and minimum charge rows appear only when
+ * non-zero.
+ */
+export function totalRows(e: Estimate, margin: number): [string, number][] {
+  const optional = (label: string, value: number): [string, number][] => (value > 0 ? [[label, value]] : [])
+  return [
+    ['Materials', e.materialCost],
+    ['Hardware', e.hardwareCost],
+    ['Labor', e.laborCost],
+    ...optional('Extra charges', e.extrasCost),
+    ...optional('Markup', e.markupAmount),
+    ['Subtotal', e.subtotal],
+    [`Margin (${(margin * 100).toFixed(0)} %)`, e.marginAmount],
+    ...optional('Minimum charge adjustment', e.minimumChargeAdjustment),
+    ['Price (excl. tax)', e.price],
+    [`Tax (${percentLabel(e.taxRate)})`, e.tax],
+  ]
+}
+
 type EstimateViewProps = {
   project: Project
   result: PipelineResult
@@ -60,19 +83,14 @@ type EstimateViewProps = {
 export function EstimateView({ project, result }: EstimateViewProps) {
   const e = result.estimate
   const c = e.currency
-  const totals: [string, number][] = [
-    ['Materials', e.materialCost],
-    ['Hardware', e.hardwareCost],
-    ['Labor', e.laborCost],
-    ['Subtotal', e.subtotal],
-    [`Margin (${(project.estimate.margin * 100).toFixed(0)} %)`, e.marginAmount],
-  ]
+  const totals = totalRows(e, project.estimate.margin)
 
   return (
     <div className="grid gap-4 p-6 lg:grid-cols-[1fr_300px]">
       <div className="flex min-w-0 flex-col gap-4">
         <LineTable caption="Materials" lines={e.materials} currency={c} />
         <LineTable caption="Hardware" lines={e.hardware} currency={c} showSku />
+        {e.extras.length > 0 && <LineTable caption="Extra charges" lines={e.extras} currency={c} />}
         <Card className="gap-0 bg-background">
           <CardHeader className="pb-3">
             <CardTitle>Labor</CardTitle>
@@ -111,8 +129,8 @@ export function EstimateView({ project, result }: EstimateViewProps) {
             ))}
             <Separator className="my-1" />
             <div className="flex items-baseline justify-between">
-              <dt className="font-mono text-sm font-semibold">Price</dt>
-              <dd className="font-mono text-2xl font-semibold text-primary tabular-nums">{money(e.price, c)}</dd>
+              <dt className="font-mono text-sm font-semibold">Total</dt>
+              <dd className="font-mono text-2xl font-semibold text-primary tabular-nums">{money(e.total, c)}</dd>
             </div>
           </dl>
           <p className="text-xs text-muted-foreground">Catalog prices are placeholders. Verify supplier costs and part numbers.</p>

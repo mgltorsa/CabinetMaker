@@ -18,6 +18,7 @@ import {
   type PageSize,
 } from './pdf-layout'
 import type { PdfFonts } from './pdf-drawing'
+import { estimateDetailGroups, estimateTotalRows, type SummaryRow } from './pdf-estimate'
 import { money, type PlanPage, type TablePage } from './pdf-plan'
 import { fitWidth, toWinAnsi } from './pdf-text'
 
@@ -133,6 +134,7 @@ function coverFacts(project: Project, result: PipelineResult): string[] {
     `Materials: ${money(result.estimate.materialCost, result.estimate.currency)}   Hardware: ${money(result.estimate.hardwareCost, result.estimate.currency)}   Labor: ${money(result.estimate.laborCost, result.estimate.currency)}`,
     `Price: ${money(result.estimate.price, result.estimate.currency)}`,
   ]
+  if (result.estimate.tax > 0) facts.push(`Total incl. tax: ${money(result.estimate.total, result.estimate.currency)}`)
   if (result.nest.unplaced.length > 0) facts.push(`WARNING: ${result.nest.unplaced.length} part(s) could not be placed on a sheet`)
   if (result.build.warnings.length > 0) facts.push(`Build warnings: ${result.build.warnings.length}`)
   return facts
@@ -177,30 +179,34 @@ export function drawCoverPage(w: Writer, size: PageSize, project: Project, resul
   lines.forEach((line, i) => write(w, line, note.x + 3, note.y + note.h - 11 - i * 4.5, 8, { maxWidthMm: note.w - 6 }))
 }
 
+/** Left column: labor and extra charge details; right column: totals through tax. */
 export function drawEstimatePage(w: Writer, size: PageSize, result: PipelineResult): void {
   const f = contentFrame(size)
   const est = result.estimate
-  const cur = est.currency
-  let y = f.y + f.h - 7
-  write(w, 'Estimate summary', f.x, y, 13, { bold: true })
-  const amountX = f.x + 140
-  const row = (labelText: string, value: string, bold = false): void => {
-    y -= 6.5
-    write(w, labelText, f.x + 2, y, 10, { bold, maxWidthMm: 90 })
-    write(w, value, amountX, y, 10, { bold, align: 'right' })
+  const top = f.y + f.h - 7
+  write(w, 'Estimate summary', f.x, top, 13, { bold: true })
+  const colW = f.w / 2 - 8
+  const column = (x: number, rows: readonly SummaryRow[], startY: number): number => {
+    let y = startY
+    rows.forEach((r) => {
+      y -= 6.5
+      write(w, r.label, x + 2, y, 10, { bold: r.isBold, maxWidthMm: colW - 34 })
+      write(w, r.amount, x + colW, y, 10, { bold: r.isBold, align: 'right' })
+    })
+    return y
   }
-  y -= 4
-  write(w, 'Labor', f.x + 2, y - 6, 11, { bold: true })
-  y -= 6
-  if (est.labor.length === 0) row('No labor lines', '')
-  est.labor.forEach((line) => row(`${line.bucket} (${Math.round(line.minutes)} min)`, money(line.cost, cur)))
-  y -= 6
-  row('Materials', money(est.materialCost, cur))
-  row('Hardware', money(est.hardwareCost, cur))
-  row('Labor', money(est.laborCost, cur))
-  hline(w.page, f.x, amountX, y - 2, INK)
-  row('Subtotal', money(est.subtotal, cur), true)
-  row('Margin', money(est.marginAmount, cur))
-  row('Price', money(est.price, cur), true)
-  write(w, 'Estimate only. Verify material, hardware prices and SKUs with your suppliers.', f.x + 2, y - 12, 8, { muted: true, maxWidthMm: f.w })
+
+  let y = top - 4
+  estimateDetailGroups(est).forEach((group) => {
+    y -= 6
+    write(w, group.heading, f.x + 2, y, 11, { bold: true })
+    y = group.rows.length === 0 ? column(f.x, [{ label: `No ${group.heading.toLowerCase()} lines`, amount: '' }], y) : column(f.x, group.rows, y)
+    y -= 2
+  })
+
+  const rx = f.x + f.w / 2 + 4
+  write(w, 'Totals', rx + 2, top - 10, 11, { bold: true })
+  const totalsEnd = column(rx, estimateTotalRows(est), top - 10)
+  hline(w.page, rx, rx + colW, totalsEnd - 2, INK)
+  write(w, 'Estimate only. Verify material, hardware prices and SKUs with your suppliers.', f.x + 2, f.y + 4, 8, { muted: true, maxWidthMm: f.w })
 }

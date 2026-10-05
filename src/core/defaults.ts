@@ -121,6 +121,11 @@ export const DEFAULT_ESTIMATE: EstimateSettings = {
     minutesPerHardwareItem: 3,
     assemblyMinutesPerCabinet: 45,
   },
+  materialMarkup: 0,
+  hardwareMarkup: 0,
+  extras: [],
+  taxRate: 0,
+  minimumCharge: 0,
 }
 
 export function defaultConstruction(): ConstructionMethod {

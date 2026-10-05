@@ -1,17 +1,28 @@
 /**
- * Cost estimate: materials + hardware (from the BOM lines) + labor, then margin.
+ * Cost estimate: materials + hardware (from the BOM lines) + labor + extra
+ * charges, plus markups, then margin, minimum charge and tax.
  *
- *   subtotal     = materialCost + hardwareCost + laborCost
- *   price        = subtotal / (1 − margin)          (margin on price, not markup)
- *   marginAmount = price − subtotal
+ *   markupAmount = materialCost × materialMarkup + hardwareCost × hardwareMarkup
+ *   subtotal     = materialCost + hardwareCost + laborCost + extrasCost + markupAmount
+ *   price        = max(subtotal / (1 − margin), minimumCharge)   (margin on price, not markup)
+ *   marginAmount = subtotal / (1 − margin) − subtotal
+ *   minimumChargeAdjustment = price − subtotal − marginAmount
+ *   tax          = price × taxRate
+ *   total        = price + tax
  *
- * Every line is rounded to cents once, where it is produced; totals are exact
- * sums in integer cents, so Σ lines = totals and price = subtotal + marginAmount
- * hold to the cent. The margin is clamped to [0, MAX_MARGIN] (see clampMargin).
+ * Every line is rounded to cents once, where it is produced (BOM, labor and
+ * extra lines; each markup amount; the margined price; the tax); totals are
+ * exact sums in integer cents, so Σ lines = totals, price = subtotal +
+ * marginAmount + minimumChargeAdjustment and total = price + tax hold to the
+ * cent. The margin is clamped to [0, MAX_MARGIN] (see clampMargin); markups,
+ * tax rate, minimum charge and extras that are negative, non-finite or absent
+ * (projects saved before they existed) count as 0.
  */
 import type { Bom, BomLine, Estimate, NestResult, Project, ProjectBuild } from '@/core/types'
+import { extraLines } from './extras'
 import { buildLabor } from './labor'
 import { fromCents, toCents } from './money'
+import { nonNegative } from './settings'
 
 /**
  * Largest accepted margin. margin ≥ 1 would divide by zero or go negative; a
@@ -26,8 +37,18 @@ export function clampMargin(margin: number): number {
   return Math.min(margin, MAX_MARGIN)
 }
 
+/** Optional commercial setting: absent, negative or non-finite → 0. */
+function optionalAmount(value: number | undefined): number {
+  return nonNegative(value ?? 0)
+}
+
 function sumCents(values: readonly number[]): number {
   return values.reduce((acc, v) => acc + toCents(v), 0)
+}
+
+/** `cents × factor`, rounded to cents. */
+function scaleCents(cents: number, factor: number): number {
+  return toCents(fromCents(cents) * factor)
 }
 
 function isMaterialLine(line: BomLine): boolean {
@@ -39,12 +60,20 @@ export function estimateCost(project: Project, build: ProjectBuild, nest: NestRe
   const materials = bom.lines.filter(isMaterialLine)
   const hardware = bom.lines.filter((l) => l.category === 'hardware')
   const labor = buildLabor(settings, build, nest)
+  const extras = extraLines(settings.extras)
+  const taxRate = optionalAmount(settings.taxRate)
 
   const materialCents = sumCents(materials.map((l) => l.total))
   const hardwareCents = sumCents(hardware.map((l) => l.total))
   const laborCents = sumCents(labor.map((l) => l.cost))
-  const subtotalCents = materialCents + hardwareCents + laborCents
-  const priceCents = toCents(fromCents(subtotalCents) / (1 - clampMargin(settings.margin)))
+  const extrasCents = sumCents(extras.map((l) => l.total))
+  const materialMarkupCents = scaleCents(materialCents, optionalAmount(settings.materialMarkup))
+  const hardwareMarkupCents = scaleCents(hardwareCents, optionalAmount(settings.hardwareMarkup))
+  const markupCents = materialMarkupCents + hardwareMarkupCents
+  const subtotalCents = materialCents + hardwareCents + laborCents + extrasCents + markupCents
+  const marginedCents = toCents(fromCents(subtotalCents) / (1 - clampMargin(settings.margin)))
+  const priceCents = Math.max(marginedCents, toCents(optionalAmount(settings.minimumCharge)))
+  const taxCents = scaleCents(priceCents, taxRate)
 
   return {
     currency: settings.currency,
@@ -55,7 +84,16 @@ export function estimateCost(project: Project, build: ProjectBuild, nest: NestRe
     hardwareCost: fromCents(hardwareCents),
     laborCost: fromCents(laborCents),
     subtotal: fromCents(subtotalCents),
-    marginAmount: fromCents(priceCents - subtotalCents),
+    marginAmount: fromCents(marginedCents - subtotalCents),
     price: fromCents(priceCents),
+    extras,
+    extrasCost: fromCents(extrasCents),
+    materialMarkupAmount: fromCents(materialMarkupCents),
+    hardwareMarkupAmount: fromCents(hardwareMarkupCents),
+    markupAmount: fromCents(markupCents),
+    minimumChargeAdjustment: fromCents(priceCents - marginedCents),
+    taxRate,
+    tax: fromCents(taxCents),
+    total: fromCents(priceCents + taxCents),
   }
 }

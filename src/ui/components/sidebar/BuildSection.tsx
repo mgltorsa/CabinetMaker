@@ -4,6 +4,7 @@ import type { Cabinet, ConstructionMethod, Project } from '@/core/types'
 import { formatLength } from '@/core/units'
 import { DRAWER_JOINERY, JOINERY, materialOptions, withCurrent } from '../../lib/options'
 import { useDesigner } from '../../store'
+import { HardwareCatalogCard } from '../catalog/HardwareCatalog'
 import { FieldGrid, LengthInput, SelectField } from '../fields'
 import { SpecCard } from './SpecCard'
 
@@ -61,6 +62,7 @@ export function BuildSection({ cabinet, project }: { cabinet: Cabinet; project: 
           <p className="text-xs text-muted-foreground">Choose a face-frame style in 01·2 Style to edit stiles and rails.</p>
         )}
       </SpecCard>
+      <HardwareCatalogCard project={project} />
     </div>
   )
 }

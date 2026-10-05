@@ -175,6 +175,15 @@ function fixtureEstimate(bom: Bom): Estimate {
     subtotal: 181.42,
     marginAmount: 45.36,
     price: 226.78,
+    extras: [],
+    extrasCost: 0,
+    materialMarkupAmount: 0,
+    hardwareMarkupAmount: 0,
+    markupAmount: 0,
+    minimumChargeAdjustment: 0,
+    taxRate: 0,
+    tax: 0,
+    total: 226.78,
   }
 }
 

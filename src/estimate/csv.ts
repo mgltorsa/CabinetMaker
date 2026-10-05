@@ -7,8 +7,8 @@
  * code), so cells that a spreadsheet would read as a formula are neutralised
  * with a leading `'` (OWASP "CSV injection").
  */
-import type { Bom, Project } from '@/core/types'
-import { formatLength } from '@/core/units'
+import type { Bom, BomLine, Estimate, Project } from '@/core/types'
+import { formatLength, round } from '@/core/units'
 import { fromCents, roundMoney, toCents } from './money'
 
 export type CsvValue = string | number
@@ -71,24 +71,49 @@ function money(amount: number): string {
   return roundMoney(amount).toFixed(2)
 }
 
+/** Tax rate label precision: `7.5 %`, `7.25 %`. */
+const PERCENT_DECIMALS = 2
+
+function lineRow(l: BomLine): CsvValue[] {
+  return [l.category, l.description, l.manufacturer ?? '', l.sku ?? '', l.qty, l.unit, money(l.unitCost), money(l.total)]
+}
+
+function summaryRow(label: string, amount: number): CsvValue[] {
+  return [label, '', '', '', '', '', '', money(amount)]
+}
+
+/** Extra charge lines, then the estimate from cost groups through tax to the total. */
+function estimateRows(e: Estimate): CsvValue[][] {
+  const adjustment = e.minimumChargeAdjustment > 0 ? [summaryRow('Minimum charge adjustment', e.minimumChargeAdjustment)] : []
+  return [
+    ...e.extras.map(lineRow),
+    summaryRow('Materials', e.materialCost),
+    summaryRow('Hardware', e.hardwareCost),
+    summaryRow('Labor', e.laborCost),
+    summaryRow('Extra charges', e.extrasCost),
+    summaryRow('Markup', e.markupAmount),
+    summaryRow('Subtotal', e.subtotal),
+    summaryRow('Margin', e.marginAmount),
+    ...adjustment,
+    summaryRow('Price (excl. tax)', e.price),
+    summaryRow(`Tax (${round(e.taxRate * 100, PERCENT_DECIMALS)} %)`, e.tax),
+    summaryRow('Total', e.total),
+  ]
+}
+
 /**
- * BOM CSV: one row per `bom.lines` row plus a final `Total` row. Money is
- * written as a plain decimal with 2 places (spreadsheet friendly); the
- * currency code goes in the header.
+ * BOM CSV: one row per `bom.lines` row. Money is written as a plain decimal
+ * with 2 places (spreadsheet friendly); the currency code goes in the header.
+ *
+ * Without `estimate` a final `Total` row sums the BOM lines. With `estimate`
+ * the extra charge lines follow the BOM lines, then the estimate summary
+ * (materials, hardware, labor, extra charges, markup, subtotal, margin, minimum
+ * charge adjustment when > 0, price, tax) and a final `Total` row = price + tax.
  */
-export function bomToCsv(bom: Bom, currency: string): string {
+export function bomToCsv(bom: Bom, currency: string, estimate?: Estimate): string {
   const header: CsvValue[] = ['Category', 'Description', 'Manufacturer', 'SKU', 'Qty', 'Unit', `Unit cost (${currency})`, `Total (${currency})`]
-  const rows = bom.lines.map((l): CsvValue[] => [
-    l.category,
-    l.description,
-    l.manufacturer ?? '',
-    l.sku ?? '',
-    l.qty,
-    l.unit,
-    money(l.unitCost),
-    money(l.total),
-  ])
+  const rows = bom.lines.map(lineRow)
+  if (estimate) return toCsv([header, ...rows, ...estimateRows(estimate)])
   const totalCents = bom.lines.reduce((acc, l) => acc + toCents(l.total), 0)
-  const footer: CsvValue[] = ['Total', '', '', '', '', '', '', money(fromCents(totalCents))]
-  return toCsv([header, ...rows, footer])
+  return toCsv([header, ...rows, summaryRow('Total', fromCents(totalCents))])
 }

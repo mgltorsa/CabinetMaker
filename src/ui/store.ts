@@ -12,6 +12,7 @@ import type {
   CabinetType,
   ConstructionMethod,
   EstimateSettings,
+  HardwareKind,
   Id,
   Machine,
   NestSettings,
@@ -24,6 +25,7 @@ import { createPreset } from '@/engine/presets'
 import { browserStorage, loadProject, REJECTED_STORAGE_KEY } from './persistence'
 import { notify } from './toast'
 import * as ops from './projectOps'
+import * as costOps from './costOps'
 
 /** What the 3D view shows (the floating "Toggle visibility" pills). */
 export interface ViewToggles {
@@ -102,6 +104,20 @@ export interface DesignerActions {
   updateNest: (patch: Partial<NestSettings>) => void
   updateEstimate: (patch: Partial<Omit<EstimateSettings, 'labor'>>) => void
   updateLabor: (patch: Partial<EstimateSettings['labor']>) => void
+
+  /** Hardware catalog (02·5). Returns the new item's id, or null at the catalog limit. */
+  addHardwareItem: (kind: HardwareKind) => Id | null
+  updateHardwareItem: (id: Id, patch: costOps.HardwarePatch) => void
+  setHardwareProp: (id: Id, key: string, value: number) => void
+  duplicateHardwareItem: (id: Id) => void
+  /** Deletes an unused item; refused while a cabinet uses it (use `replaceHardwareItem`). */
+  deleteHardwareItem: (id: Id) => void
+  /** Moves every cabinet onto `replacementId` (null: no pull), then deletes the item. */
+  replaceHardwareItem: (id: Id, replacementId: Id | null) => void
+  /** Estimate extra charges (03·3). */
+  addExtraCharge: () => void
+  updateExtraCharge: (id: Id, patch: costOps.ExtraChargePatch) => void
+  removeExtraCharge: (id: Id) => void
 }
 
 export interface DesignerState extends DesignerActions {
@@ -122,7 +138,7 @@ function validSelection(project: Project, preferred: Id | null): Id | null {
 }
 
 export function createDesignerStore(initial: Project = createProject()): DesignerStore {
-  return createStore<DesignerState>()((set) => {
+  return createStore<DesignerState>()((set, get) => {
     /** Apply a pure project edit. */
     const edit = (fn: (p: Project) => Project): void => set((s) => ({ project: fn(s.project) }))
 
@@ -194,6 +210,20 @@ export function createDesignerStore(initial: Project = createProject()): Designe
       updateNest: (patch) => edit((p) => ops.updateNest(p, patch)),
       updateEstimate: (patch) => edit((p) => ops.updateEstimate(p, patch)),
       updateLabor: (patch) => edit((p) => ops.updateLabor(p, patch)),
+
+      addHardwareItem: (kind) => {
+        const added = costOps.addHardwareItem(get().project, kind)
+        if (added.id !== null) set({ project: added.project })
+        return added.id
+      },
+      updateHardwareItem: (id, patch) => edit((p) => costOps.updateHardwareItem(p, id, patch)),
+      setHardwareProp: (id, key, value) => edit((p) => costOps.setHardwareProp(p, id, key, value)),
+      duplicateHardwareItem: (id) => edit((p) => costOps.duplicateHardwareItem(p, id).project),
+      deleteHardwareItem: (id) => edit((p) => costOps.deleteHardwareItem(p, id)),
+      replaceHardwareItem: (id, replacementId) => edit((p) => costOps.replaceHardwareItem(p, id, replacementId)),
+      addExtraCharge: () => edit((p) => costOps.addExtraCharge(p).project),
+      updateExtraCharge: (id, patch) => edit((p) => costOps.updateExtraCharge(p, id, patch)),
+      removeExtraCharge: (id) => edit((p) => costOps.removeExtraCharge(p, id)),
     }
   })
 }
