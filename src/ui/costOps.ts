@@ -41,6 +41,7 @@ export const DEFAULT_HARDWARE_PROPS: Readonly<Record<HardwareKind, Readonly<Reco
   leg: {},
   screw: {},
   other: {},
+  'rod-support': { diameter: 25 },
 }
 
 export const HARDWARE_KIND_LABEL: Readonly<Record<HardwareKind, string>> = {
@@ -54,6 +55,7 @@ export const HARDWARE_KIND_LABEL: Readonly<Record<HardwareKind, string>> = {
   leg: 'Leg',
   screw: 'Screw',
   other: 'Other',
+  'rod-support': 'Rod support',
 }
 
 export interface HardwareUse {

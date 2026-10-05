@@ -160,3 +160,29 @@ export const MIN_PART_SIZE: Mm = 1
 export const TALL_CABINET_HEIGHT: Mm = 1500
 /** Separate kick bases get an intermediate sleeper at most this far apart. */
 export const KICK_SLEEPER_MAX_SPACING: Mm = 900
+
+/**
+ * Hanging rods. Typical wardrobe planning values (e.g. Häfele / Hettich
+ * wardrobe-rail planning sheets and common joinery practice); verify against
+ * the rod and support actually ordered.
+ */
+/** Rod centre below the surface above: room to lift a hanger hook off (50–75 mm is usual). */
+export const DEFAULT_ROD_DROP: Mm = 65
+/** Rod cut this much short of the panel at each end, so it drops into the end flange cups. */
+export const ROD_END_CLEARANCE: Mm = 3
+/** Rod centre position across the usable interior depth (0 = rear, 1 = front): centred for hangers. */
+export const ROD_DEPTH_FRACTION = 0.5
+/** Ø25 tube spans longer than this sag under a full load and need a centre support. */
+export const ROD_MAX_UNSUPPORTED_SPAN: Mm = 1200
+/** Clear height from the rod centre to the underside of a shelf above it (hanger hooks lift off). */
+export const ROD_SHELF_CLEARANCE: Mm = 50
+/** End supports (flanges) per rod. */
+export const ROD_END_SUPPORTS = 2
+/** Catalog `centre` prop for rod supports (`HardwareItem.props.centre`): 1 = centre support. */
+export const ROD_SUPPORT_CENTRE = 1
+/**
+ * Wardrobe preset: rod drop below the interior top that leaves an upper
+ * (hat) shelf above and puts the rod centre ~1.73 m above the floor on a
+ * 2100 mm tower with a 100 mm kick — long-garment hanging height.
+ */
+export const WARDROBE_ROD_DROP: Mm = 350

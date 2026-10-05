@@ -1,6 +1,6 @@
 /**
  * Line icons for the preset picker, drawn from each preset's real engine
- * output (outline, fronts, shelves, pull marks) so the icon always matches
+ * output (outline, fronts, shelves, rods, pull marks) so the icon always matches
  * what the preset builds.
  */
 import { DEFAULT_HARDWARE, DEFAULT_MATERIALS } from '@/core/defaults'
@@ -25,6 +25,8 @@ export interface PresetIcon {
   lines: { x1: number; x2: number; y: number }[]
   /** Short pull marks. */
   pulls: { x1: number; y1: number; x2: number; y2: number }[]
+  /** Hanging rods, drawn even behind doors (they say what the preset is for). */
+  rods: { x1: number; x2: number; y: number }[]
 }
 
 const SIZE = 40
@@ -61,5 +63,9 @@ export function presetIcon(type: CabinetType): PresetIcon {
     const x = nearRight ? r.x + r.w - 2 : r.x + 2
     return { x1: x, y1: r.y + r.h * 0.42, x2: x, y2: r.y + r.h * 0.58 }
   })
-  return { width, height, outline: { x: 0, y: 0, w: width, h: height }, fronts: frontBoxes, lines, pulls }
+  const rods = build.parts
+    .filter((p) => p.group === 'rod')
+    .map(rect)
+    .map((r) => ({ x1: r.x, x2: r.x + r.w, y: r.y + r.h / 2 }))
+  return { width, height, outline: { x: 0, y: 0, w: width, h: height }, fronts: frontBoxes, lines, pulls, rods }
 }

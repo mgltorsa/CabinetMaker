@@ -16,7 +16,10 @@ const maple = DEFAULT_MATERIALS[4] as LinearMaterial
 
 describe('librarySummary', () => {
   it('counts materials by kind', () => {
-    expect(librarySummary(DEFAULT_MATERIALS)).toBe('5 materials · 4 sheet, 1 linear')
+    const sheets = DEFAULT_MATERIALS.filter((m) => m.kind === 'sheet').length
+    const linear = DEFAULT_MATERIALS.length - sheets
+    expect(librarySummary(DEFAULT_MATERIALS)).toBe(`${DEFAULT_MATERIALS.length} materials · ${sheets} sheet, ${linear} linear`)
+    expect(librarySummary(DEFAULT_MATERIALS.filter((m) => m.kind === 'sheet').slice(0, 1))).toBe('1 material · 1 sheet, 0 linear')
     expect(librarySummary([ply])).toBe('1 material · 1 sheet, 0 linear')
   })
 })

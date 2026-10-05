@@ -5,6 +5,7 @@
  */
 import { defaultCabinet, defaultConstruction, newBay, newSection } from '@/core/defaults'
 import type { Bay, Cabinet, CabinetType, ConstructionMethod, Section } from '@/core/types'
+import { WARDROBE_ROD_DROP } from './constants'
 
 export interface PresetInfo {
   type: CabinetType
@@ -22,6 +23,7 @@ export const PRESETS: PresetInfo[] = [
   { type: 'dresser', label: 'Dresser', description: '1200 × 800 × 500, two columns of three drawers' },
   { type: 'vanity', label: 'Vanity', description: '900 × 810 × 530, sink doors beside three drawers' },
   { type: 'custom', label: 'Custom box', description: '600 × 720 × 560 frameless box with one shelf' },
+  { type: 'wardrobe', label: 'Wardrobe / closet tower', description: '1000 × 2100 × 600, two doors, upper shelf over a hanging rod' },
 ]
 
 type BaySpec = Partial<Omit<Bay, 'id' | 'kind' | 'height'>>
@@ -128,6 +130,16 @@ function bodyFor(type: CabinetType): PresetBody {
         depth: 560,
         construction: construction({ toeKick: NO_KICK, top: 'full-top', rearNailer: false }),
         sections: [newSection([bay('open', null, { shelfCount: 1 })])],
+      }
+    case 'wardrobe':
+      return {
+        ...common,
+        name: 'Wardrobe',
+        width: 1000,
+        height: 2100,
+        depth: 600,
+        construction: construction({ top: 'full-top' }),
+        sections: [newSection([bay('door', null, { doorCount: 2, shelfCount: 1, rod: { dropFromTop: WARDROBE_ROD_DROP } })])],
       }
   }
 }

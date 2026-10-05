@@ -18,7 +18,7 @@ test('a user material can be added, coloured, used, and only deleted once replac
   await openSection(page, 'Build Options')
   await page.getByRole('tab', { name: 'Front', exact: true }).click()
   await openCard(page, 'Material library')
-  await expect(page.getByRole('button', { name: /^02·4 Material library 5 materials · 4 sheet, 1 linear$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^02·4 Material library 6 materials · 4 sheet, 2 linear$/ })).toBeVisible()
 
   // Add and edit a sheet material: the new row opens for editing.
   await page.getByRole('button', { name: 'Add sheet material' }).click()
@@ -31,7 +31,7 @@ test('a user material can be added, coloured, used, and only deleted once replac
   await row.getByLabel('Colour', { exact: true }).fill('#123abc')
   await expect(row.getByLabel('Colour (hex)')).toHaveValue('#123abc')
   await expect(page.getByRole('button', { name: /^Walnut ply 19 19 mm · 2440 × 1220 mm · grained/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^02·4 Material library 6 materials · 5 sheet, 1 linear$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^02·4 Material library 7 materials · 5 sheet, 2 linear$/ })).toBeVisible()
 
   // Every material select picks it up: use it for the carcass.
   await openCard(page, 'Materials')
@@ -61,7 +61,7 @@ test('a user material can be added, coloured, used, and only deleted once replac
   await page.getByLabel('Replace with').selectOption({ label: '18 mm plywood' })
   await page.getByRole('button', { name: 'Replace and delete' }).click()
   await expect(page.getByRole('button', { name: /^Walnut ply 19 / })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /^02·4 Material library 5 materials/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^02·4 Material library 6 materials/ })).toBeVisible()
   await openCard(page, 'Materials')
   await expect(page.getByLabel('Carcass', { exact: true })).toHaveValue('ply-18')
 })

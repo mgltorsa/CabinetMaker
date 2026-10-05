@@ -65,7 +65,7 @@ describe('addMaterial', () => {
     expect(m.sheetWidth).toBeLessThanOrEqual(p.machine.tableY)
     expect(m.costPerSheet).toBeGreaterThanOrEqual(0)
     expect(project.materials).toHaveLength(p.materials.length + 1)
-    expect(p.materials).toHaveLength(5) // input untouched
+    expect(p.materials).toHaveLength(fixtureProject().materials.length) // input untouched
     expect(validateProject(project)).toBeNull()
   })
 
@@ -253,7 +253,8 @@ describe('deleteMaterial', () => {
 
   it('keeps the last material of each kind', () => {
     const p = fixtureProject()
-    const noCabinets = { ...p, cabinets: [] }
+    // Only one linear material left: the face-frame maple (drop the default rod stock).
+    const noCabinets = { ...p, cabinets: [], materials: p.materials.filter((m) => m.kind === 'sheet' || m.id === 'maple-19x63') }
     expect(materialDeleteBlock(noCabinets, 'maple-19x63')).toBe('last-of-kind')
     expect(deleteMaterial(noCabinets, 'maple-19x63')).toBe(noCabinets)
     expect(materialDeleteBlock(noCabinets, 'nope')).toBe('missing')

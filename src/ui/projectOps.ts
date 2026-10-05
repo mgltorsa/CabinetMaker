@@ -4,7 +4,7 @@
  * Count limits (`lib/limits`) are enforced here so the editor can never build
  * a project the validator would reject on reload.
  */
-import { newBay, newSection } from '@/core/defaults'
+import { DEFAULT_HARDWARE, DEFAULT_MATERIALS, DEFAULT_ROD_MATERIAL_ID, newBay, newSection } from '@/core/defaults'
 import { newId } from '@/core/ids'
 import type {
   Bay,
@@ -12,6 +12,7 @@ import type {
   Cabinet,
   ConstructionMethod,
   EstimateSettings,
+  HangingRod,
   Id,
   LinearMaterial,
   Machine,
@@ -386,4 +387,43 @@ function withKnownMaterials(project: Project, cabinet: Cabinet): Cabinet {
   const topId = cabinet.top.materialId
   const top = topId === null || known.has(topId) ? cabinet.top : { ...cabinet.top, materialId: null }
   return { ...cabinet, construction, top }
+}
+
+// ─── Hanging rods ───────────────────────────────────────────────────────────
+
+function withRod(bay: Bay, rod: HangingRod | null): Bay {
+  if (rod !== null) return { ...bay, rod: { ...rod } }
+  const copy: Bay = { ...bay }
+  delete copy.rod
+  return copy
+}
+
+/** Give a door/open bay a hanging rod, or remove it (`null` drops the key entirely). */
+export function setBayRod(project: Project, cabinetId: Id, sectionId: Id, bayId: Id, rod: HangingRod | null): Project {
+  return mapSection(project, cabinetId, sectionId, (s) => ({ ...s, bays: s.bays.map((b) => (b.id === bayId ? withRod(b, rod) : b)) }))
+}
+
+function usesRods(cabinet: Cabinet): boolean {
+  return cabinet.sections.some((s) => s.bays.some((b) => b.kind !== 'drawer' && b.rod !== undefined))
+}
+
+/**
+ * Projects saved before rods existed have no rod stock or rod supports. When a
+ * cabinet uses rods, add the defaults that are missing (the default rod
+ * material only when it is the one referenced), so the estimate can bill them.
+ * Returns the same reference when nothing is missing.
+ */
+export function ensureRodCatalog(project: Project): Project {
+  const rodCabinets = project.cabinets.filter(usesRods)
+  if (rodCabinets.length === 0) return project
+  const needsDefaultRod =
+    rodCabinets.some((c) => (c.construction.rodMaterialId ?? DEFAULT_ROD_MATERIAL_ID) === DEFAULT_ROD_MATERIAL_ID) &&
+    !project.materials.some((m) => m.id === DEFAULT_ROD_MATERIAL_ID)
+  const needsSupports = !project.hardware.some((h) => h.kind === 'rod-support')
+  if (!needsDefaultRod && !needsSupports) return project
+  return {
+    ...project,
+    materials: needsDefaultRod ? [...project.materials, ...structuredClone(DEFAULT_MATERIALS.filter((m) => m.id === DEFAULT_ROD_MATERIAL_ID))] : project.materials,
+    hardware: needsSupports ? [...project.hardware, ...structuredClone(DEFAULT_HARDWARE.filter((h) => h.kind === 'rod-support'))] : project.hardware,
+  }
 }

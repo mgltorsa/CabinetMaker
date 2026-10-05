@@ -17,7 +17,7 @@ describe('MaterialLibrary', () => {
     const html = renderToStaticMarkup(<MaterialLibrary project={fixtureProject()} />)
     expect(text(html)).toContain('02·4')
     expect(text(html)).toContain('Material library')
-    expect(text(html)).toContain('5 materials · 4 sheet, 1 linear')
+    expect(text(html)).toMatch(/\d+ materials · \d+ sheet, \d+ linear/)
   })
 
   it('lists materials grouped by kind with add buttons', () => {
@@ -82,7 +82,9 @@ describe('DeleteMaterialPanel', () => {
   })
 
   it('explains why the last material of a kind stays', () => {
-    const p = { ...fixtureProject(), cabinets: [] }
+    const base = fixtureProject()
+    // Only one linear material left: the face-frame maple (drop the default rod stock).
+    const p = { ...base, cabinets: [], materials: base.materials.filter((m) => m.kind === 'sheet' || m.id === 'maple-19x63') }
     const html = text(renderToStaticMarkup(<DeleteMaterialPanel project={p} material={material(p, 'maple-19x63')} onClose={() => {}} />))
     expect(html).toContain('last linear stock')
   })

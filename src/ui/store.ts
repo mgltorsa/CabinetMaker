@@ -13,6 +13,7 @@ import type {
   ConstructionMethod,
   EstimateSettings,
   HardwareKind,
+  HangingRod,
   Id,
   Machine,
   Material,
@@ -99,6 +100,8 @@ export interface DesignerActions {
   moveBay: (cabinetId: Id, sectionId: Id, bayId: Id, delta: number) => void
   updateBay: (cabinetId: Id, sectionId: Id, bayId: Id, patch: ops.BayPatch) => void
   setDrawerCount: (cabinetId: Id, sectionId: Id, count: number) => void
+  /** Add (or with `null` remove) a bay's hanging rod; adds missing rod stock/supports to the catalog. */
+  setBayRod: (cabinetId: Id, sectionId: Id, bayId: Id, rod: HangingRod | null) => void
 
   updateMachine: (patch: Partial<Machine>) => void
   updateTool: (toolId: Id, patch: Partial<Omit<Tool, 'id'>>) => void
@@ -178,8 +181,9 @@ export function createDesignerStore(initial: Project = createProject()): Designe
 
       addCabinetFromPreset: (type) =>
         set((s) => {
-          const project = ops.addCabinet(s.project, createPreset(type))
-          if (project === s.project) return {}
+          const added = ops.addCabinet(s.project, createPreset(type))
+          if (added === s.project) return {}
+          const project = ops.ensureRodCatalog(added)
           return { project, selectedCabinetId: project.cabinets.at(-1)?.id ?? s.selectedCabinetId, isPickerOpen: false, section: 'design' as const }
         }),
       duplicateCabinet: (id) =>
@@ -212,6 +216,7 @@ export function createDesignerStore(initial: Project = createProject()): Designe
       moveBay: (cabinetId, sectionId, bayId, delta) => edit((p) => ops.moveBay(p, cabinetId, sectionId, bayId, delta)),
       updateBay: (cabinetId, sectionId, bayId, patch) => edit((p) => ops.updateBay(p, cabinetId, sectionId, bayId, patch)),
       setDrawerCount: (cabinetId, sectionId, count) => edit((p) => ops.setDrawerCount(p, cabinetId, sectionId, count)),
+      setBayRod: (cabinetId, sectionId, bayId, rod) => edit((p) => ops.ensureRodCatalog(ops.setBayRod(p, cabinetId, sectionId, bayId, rod))),
 
       updateMachine: (patch) => edit((p) => ops.updateMachine(p, patch)),
       updateTool: (toolId, patch) => edit((p) => ops.updateTool(p, toolId, patch)),

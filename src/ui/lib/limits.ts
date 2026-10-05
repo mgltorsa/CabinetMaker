@@ -67,3 +67,5 @@ export const MAX_EXTRA_CHARGES = 50
 export const SLIDE_LENGTH: Bounds = { min: 100, max: 1500 }
 export const HINGE_OPENING_ANGLE: Bounds = { min: 1, max: 270 }
 export const PULL_CENTERS: Bounds = { min: 16, max: 1500 }
+/** Hanging-rod drop below the bay top (rod centre). */
+export const ROD_DROP: Bounds = { min: 1, max: 3000 }

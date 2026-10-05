@@ -10,7 +10,7 @@ import { useDesigner } from '../store'
 import { Button } from './ui/button'
 
 const CATEGORIES: { title: string; color: string; types: CabinetType[] }[] = [
-  { title: 'Furniture', color: 'text-furniture', types: ['bookshelf', 'dresser', 'nightstand', 'custom'] },
+  { title: 'Furniture', color: 'text-furniture', types: ['bookshelf', 'dresser', 'nightstand', 'custom', 'wardrobe'] },
   { title: 'Base & tall cabinets', color: 'text-base-tall', types: ['base', 'drawer-bank', 'tall', 'vanity'] },
   { title: 'Wall cabinets', color: 'text-wall', types: ['wall'] },
 ]
@@ -37,6 +37,9 @@ function PresetGlyph({ type }: { type: CabinetType }) {
       ))}
       {icon.pulls.map((p, i) => (
         <line key={i} {...p} strokeWidth={0.9} />
+      ))}
+      {icon.rods.map((r, i) => (
+        <line key={`rod-${i}`} x1={r.x1} x2={r.x2} y1={r.y} y2={r.y} strokeWidth={0.9} strokeDasharray="1.6 1" />
       ))}
     </svg>
   )

@@ -4,7 +4,7 @@ import { Edges, Html, Line, OrbitControls } from '@react-three/drei'
 import { Canvas, type ThreeEvent, useThree } from '@react-three/fiber'
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { CanvasTexture, type InstancedMesh, Object3D, Quaternion, RepeatWrapping, SRGBColorSpace, Vector3 } from 'three'
-import type { DimensionSpec, Finish, MeshSpec, PinHoleSpec, PullSpec, SceneSpec } from '../lib/scene'
+import type { DimensionSpec, Finish, MeshSpec, PinHoleSpec, PullSpec, RodSpec, SceneSpec } from '../lib/scene'
 
 /** Camera distance as a multiple of the scene's largest extent. */
 const CAMERA_DISTANCE = 3.1
@@ -19,6 +19,7 @@ const FINISHES: Record<Finish, { color: string; roughness: number }> = {
   'toe-kick': { color: '#ddd7cd', roughness: 0.7 },
   top: { color: '#ece8e1', roughness: 0.35 },
   'face-frame': { color: '#dcc59f', roughness: 0.6 },
+  rod: { color: '#e4e8ec', roughness: 0.2 },
 }
 
 /** Deterministic plank texture for the floor (no network assets in a static export). */
@@ -103,6 +104,54 @@ function PartMesh({ mesh, isHovered, onHover, onPick }: PartMeshProps) {
 }
 
 const UP = new Vector3(0, 1, 0)
+
+/** Chrome-ish rod: only lightly metallic — the scene has no environment map, so high metalness renders black. */
+const ROD_METALNESS = 0.3
+/** End flanges: discs this many rod radii across, filling the gap between rod end and panel. */
+const ROD_SUPPORT_RADIUS_FACTOR = 2.2
+const ROD_SUPPORT_THICKNESS = 0.003
+
+/** three.js cylinders run along +Y; turn them onto the rod's axis. */
+function rodRotation(axis: RodSpec['axis']): [number, number, number] {
+  if (axis === 'x') return [0, 0, Math.PI / 2]
+  if (axis === 'z') return [Math.PI / 2, 0, 0]
+  return [0, 0, 0]
+}
+
+/** Hanging rod: a cylinder along its length axis with a support disc at each end. */
+function RodMesh({ mesh, rod, isHovered, onHover, onPick }: PartMeshProps & { rod: RodSpec }) {
+  const finish = FINISHES[mesh.finish]
+  const half = rod.length / 2 + ROD_SUPPORT_THICKNESS / 2
+  const supportRadius = rod.radius * ROD_SUPPORT_RADIUS_FACTOR
+  const handleOver = (e: ThreeEvent<PointerEvent>): void => {
+    e.stopPropagation()
+    onHover(mesh.partId)
+  }
+  const handleOut = (e: ThreeEvent<PointerEvent>): void => {
+    e.stopPropagation()
+    onHover(null)
+  }
+  const handleClick = (e: ThreeEvent<MouseEvent>): void => {
+    e.stopPropagation()
+    onPick(mesh.cabinetId)
+  }
+  return (
+    <group position={mesh.position} rotation={[0, mesh.rotationY, 0]}>
+      <group rotation={rodRotation(rod.axis)}>
+        <mesh castShadow onPointerOver={handleOver} onPointerOut={handleOut} onClick={handleClick}>
+          <cylinderGeometry args={[rod.radius, rod.radius, rod.length, 24]} />
+          <meshStandardMaterial color={finish.color} roughness={finish.roughness} metalness={ROD_METALNESS} emissive={HOVER_EMISSIVE} emissiveIntensity={isHovered ? 0.28 : 0} />
+        </mesh>
+        {[-half, half].map((y) => (
+          <mesh key={y} position={[0, y, 0]} castShadow>
+            <cylinderGeometry args={[supportRadius, supportRadius, ROD_SUPPORT_THICKNESS, 24]} />
+            <meshStandardMaterial color={finish.color} roughness={finish.roughness} metalness={ROD_METALNESS} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  )
+}
 
 /** Bar pull: a rod between the two holes, held off the face by two posts. */
 function Pull({ pull }: { pull: PullSpec }) {
@@ -268,9 +317,13 @@ export default function Viewer3D({ scene, focusKey, hoveredPartId, onHover, onPi
           <meshStandardMaterial color="#ebe6de" roughness={0.95} />
         </mesh>
 
-        {scene.meshes.map((m) => (
-          <PartMesh key={m.partId} mesh={m} isHovered={m.partId === hoveredPartId} onHover={onHover} onPick={onPick} />
-        ))}
+        {scene.meshes.map((m) =>
+          m.rod ? (
+            <RodMesh key={m.partId} mesh={m} rod={m.rod} isHovered={m.partId === hoveredPartId} onHover={onHover} onPick={onPick} />
+          ) : (
+            <PartMesh key={m.partId} mesh={m} isHovered={m.partId === hoveredPartId} onHover={onHover} onPick={onPick} />
+          ),
+        )}
         {scene.pulls.map((p) => (
           <Pull key={p.id} pull={p} />
         ))}

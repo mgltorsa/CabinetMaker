@@ -5,7 +5,7 @@
  */
 import type { PartGroup } from '@/core/types'
 
-export type Finish = 'carcass' | 'front' | 'back' | 'drawer-box' | 'toe-kick' | 'top' | 'face-frame'
+export type Finish = 'carcass' | 'front' | 'back' | 'drawer-box' | 'toe-kick' | 'top' | 'face-frame' | 'rod'
 
 export const FINISH_BY_GROUP: Readonly<Record<PartGroup, Finish>> = {
   carcass: 'carcass',
@@ -18,6 +18,7 @@ export const FINISH_BY_GROUP: Readonly<Record<PartGroup, Finish>> = {
   'toe-kick': 'toe-kick',
   top: 'top',
   'face-frame': 'face-frame',
+  rod: 'rod',
 }
 
 interface FinishLook {
@@ -34,6 +35,7 @@ export const FINISH_LOOK: Readonly<Record<Finish, FinishLook>> = {
   'toe-kick': { color: '#ddd7cd', roughness: 0.7 },
   top: { color: '#ece8e1', roughness: 0.35 },
   'face-frame': { color: '#dcc59f', roughness: 0.6 },
+  rod: { color: '#c9ccd0', roughness: 0.3 },
 }
 
 /** sRGB transfer function inverse (IEC 61966-2-1): glTF base colours are linear. */

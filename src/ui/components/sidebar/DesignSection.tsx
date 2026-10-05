@@ -1,5 +1,6 @@
 'use client'
 
+import { DEFAULT_ROD_MATERIAL_ID } from '@/core/defaults'
 import type { Bay, Cabinet, ConstructionMethod, Project, UnitSystem } from '@/core/types'
 import { CABINET_DIMENSION, FLOOR_HEIGHT, MAX_BAYS, MAX_SHELF_PIN_DIAMETER, MAX_SHELVES, MIN_SHELF_PIN_SPACING } from '../../lib/limits'
 import {
@@ -8,6 +9,7 @@ import {
   DRAWER_JOINERY,
   hardwareOptions,
   materialOptions,
+  rodMaterialOptions,
   slideMountOptions,
   slideOptions,
   STYLES,
@@ -22,7 +24,8 @@ import {
   doorsSummary,
   drawersSummary,
   layoutSummary,
-  shelvesSummary,
+  rodCount,
+  shelvesAndRodsSummary,
   STYLE_LABELS,
   toeKickSummary,
   topSummary,
@@ -178,7 +181,7 @@ function ShelvesCard({ cabinet, project, units }: CardProps) {
     <SpecCard
       index="01·6"
       title="Shelves"
-      summary={shelvesSummary(cabinet)}
+      summary={shelvesAndRodsSummary(cabinet)}
       advanced={
         <>
           <div className="col-span-2">
@@ -209,6 +212,16 @@ function ShelvesCard({ cabinet, project, units }: CardProps) {
               onChange={(shelfPinId) => updateHardware(cabinet.id, { shelfPinId })}
             />
           </div>
+          {rodCount(cabinet) > 0 && (
+            <div className="col-span-2">
+              <SelectField
+                label="Hanging rod stock"
+                value={c.rodMaterialId ?? DEFAULT_ROD_MATERIAL_ID}
+                options={withCurrent(rodMaterialOptions(project), c.rodMaterialId ?? DEFAULT_ROD_MATERIAL_ID)}
+                onChange={(rodMaterialId) => set({ rodMaterialId })}
+              />
+            </div>
+          )}
         </>
       }
     >
