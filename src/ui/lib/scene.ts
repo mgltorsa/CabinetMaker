@@ -6,8 +6,10 @@
  * form an upper run from the same left edge (no room plan yet, plan phase P6).
  * Every cabinet's back sits on the wall plane (cabinet space z = 0).
  */
+import { BAR_LENGTH_OVER_CENTERS, resolveHandle, type HandleModel, type ResolvedHandle } from '@/core/handles'
 import { panelToCabinet } from '@/core/panel'
-import type { Axis, Cabinet, HoleOp, Material, Part, PartGroup, ProjectBuild, SignedAxis, UnitSystem } from '@/core/types'
+import { pullPlacements } from '@/core/pull-placement'
+import type { Axis, Cabinet, HandleStyle, HardwareItem, HoleOp, Material, Part, PartGroup, ProjectBuild, SignedAxis, UnitSystem } from '@/core/types'
 import { formatLength } from '@/core/units'
 import { synthesizedTop } from '@/drawings/front-elevation'
 import { hingeSide } from '@/drawings/part-geometry'
@@ -20,8 +22,6 @@ const RUN_GAP_MM = 20
 const DRAWER_OPEN_FRACTION = 0.6
 /** Door swing when "Doors open" is on. */
 const DOOR_OPEN_DEG = 100
-/** Pull stand-off from the front face (bar pulls). */
-const PULL_STANDOFF_MM = 28
 /** Dimension line offset from the cabinet, and extension overshoot. */
 const DIM_OFFSET_MM = 90
 const DIM_OVERSHOOT_MM = 25
@@ -68,14 +68,39 @@ export interface RodSpec {
   length: number
 }
 
-/** A bar pull between two holes on a front's show face. */
+/**
+ * A pull on a front's show face, metres. `a`/`b` are its two holes (bar, cup,
+ * edge, custom on centres), the hole twice (knob), or the profile's ends
+ * (J-profile). The local frame is `along` × `up` = `normal`.
+ */
 export interface PullSpec {
   id: string
   a: Vec3Tuple
   b: Vec3Tuple
   /** Unit vector out of the show face. */
   normal: Vec3Tuple
+  /** Projection: how far the grip stands off the show face. */
   standoff: number
+  style: HandleStyle
+  /** Centre of the pull on the show face (J-profile: middle of the grip edge). */
+  centre: Vec3Tuple
+  /** Unit vector along the pull's length. */
+  along: Vec3Tuple
+  /** Unit vector across the pull in the face; toward the grip edge for edge pulls and J-profiles. */
+  up: Vec3Tuple
+  /** Edge pulls: distance from `centre` to the grip edge. */
+  edgeDistance: number
+  length: number
+  /** Across the pull: cup height, edge / J lip height. */
+  width: number
+  /** Bar / knob diameter, profile sheet thickness. */
+  diameter: number
+  /** Thickness of the front (edge pulls and J-profiles wrap its edge). */
+  frontThickness: number
+  /** `#rrggbb`. */
+  color: string
+  /** Custom handles: the imported model to load from the model store. */
+  model?: HandleModel
 }
 
 export interface PinHoleSpec {
@@ -117,6 +142,8 @@ export interface SceneOptions {
   materials?: readonly Material[]
   /** Room-space X (mm) to centre on instead of the run (room view: keeps the scene still while cabinets change). */
   centreX?: number
+  /** Project hardware catalog: picks each cabinet's handle style; absent = bar pulls sized from their holes. */
+  hardware?: readonly HardwareItem[]
 }
 
 // ─── Part classification ────────────────────────────────────────────────────
@@ -192,7 +219,6 @@ function faceANormal(part: Part): V {
   return AXIS_VECTORS[`+${part.axes.thickness}` as SignedAxis]
 }
 
-const neg = (v: V): V => ({ x: -v.x, y: -v.y, z: -v.z })
 
 /** Rigid motion applied to a part: rotate about a vertical pivot, then translate. */
 interface Motion {
@@ -240,6 +266,20 @@ const holesFor = (part: Part, purpose: HoleOp['purpose']): HoleOp[] =>
   part.ops.filter((o): o is HoleOp => o.kind === 'hole' && o.purpose === purpose && o.face === 'A')
 
 const pullHoles = (part: Part): HoleOp[] => part.ops.filter((o): o is HoleOp => o.kind === 'hole' && o.purpose === 'pull')
+
+/** Stand-in pull item when the catalog is not given or lacks the cabinet's pull (a plain bar). */
+const FALLBACK_BAR: HardwareItem = { id: '', kind: 'pull', name: '', manufacturer: '', sku: '', unitCost: 0, props: {} }
+
+/** The handle drawn on a front: its catalog pull, else a bar on the front's own hole spacing. */
+function frontHandle(part: Part, cabinet: Cabinet | undefined, hardware: readonly HardwareItem[] | undefined): ResolvedHandle | null {
+  const pullId = cabinet?.hardware.pullId ?? null
+  const item = pullId === null ? undefined : hardware?.find((h) => h.id === pullId && h.kind === 'pull')
+  if (item) return resolveHandle(item)
+  const [h1, h2] = pullHoles(part)
+  if (!h1 || !h2) return null
+  const centers = Math.hypot(h2.x - h1.x, h2.y - h1.y)
+  return { ...resolveHandle({ ...FALLBACK_BAR, props: { centers } }), length: centers + BAR_LENGTH_OVER_CENTERS }
+}
 
 export function buildScene(build: ProjectBuild, cabinets: readonly Cabinet[], view: ViewToggles, options: SceneOptions): SceneSpec {
   const offsets = runOffsets(cabinets)
@@ -302,14 +342,35 @@ export function buildScene(build: ProjectBuild, cabinets: readonly Cabinet[], vi
   const pinHoles: PinHoleSpec[] = []
   for (const { part, motion } of placed) {
     if (part.group === 'front') {
-      // Pull holes come in pairs (one bar pull per pair), in op order.
-      const holes = pullHoles(part)
-      const out = rotateY(neg(faceANormal(part)), motion.angle)
-      for (let i = 0; i + 1 < holes.length; i += 2) {
-        const [h1, h2] = [holes[i], holes[i + 1]]
-        if (!h1 || !h2) continue
-        const at = (h: HoleOp): V => movePoint(toWorld(part, panelToCabinet(part, h.x, h.y, 0)), motion)
-        pulls.push({ id: `${part.id}:pull-${i / 2}`, a: m(at(h1)), b: m(at(h2)), normal: dir(out), standoff: PULL_STANDOFF_MM / MM_PER_M })
+      const cabinet = cabinetById.get(part.cabinetId)
+      const handle = frontHandle(part, cabinet, options.hardware)
+      if (handle && cabinet) {
+        const at = (p: V): Vec3Tuple => m(movePoint(toWorld(part, p), motion))
+        const turn = (v: V): Vec3Tuple => dir(rotateY(v, motion.angle))
+        for (const pl of pullPlacements(part, cabinet, handle)) {
+          const half = { x: (pl.along.x * pl.length) / 2, y: (pl.along.y * pl.length) / 2, z: (pl.along.z * pl.length) / 2 }
+          const [h1, h2] = pl.holes
+          const a = h1 ?? { x: pl.centre.x - half.x, y: pl.centre.y - half.y, z: pl.centre.z - half.z }
+          const b = h2 ?? h1 ?? { x: pl.centre.x + half.x, y: pl.centre.y + half.y, z: pl.centre.z + half.z }
+          pulls.push({
+            id: `${part.id}:pull-${pl.index}`,
+            a: at(a),
+            b: at(b),
+            normal: turn(pl.normal),
+            standoff: handle.projection / MM_PER_M,
+            style: handle.style,
+            centre: at(pl.centre),
+            along: turn(pl.along),
+            up: turn(pl.up),
+            edgeDistance: pl.edgeDistance / MM_PER_M,
+            length: pl.length / MM_PER_M,
+            width: handle.width / MM_PER_M,
+            diameter: handle.diameter / MM_PER_M,
+            frontThickness: part.thickness / MM_PER_M,
+            color: handle.color,
+            ...(handle.style === 'custom' && handle.model ? { model: handle.model } : {}),
+          })
+        }
       }
     }
     const pins = holesFor(part, 'shelf-pin')

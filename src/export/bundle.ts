@@ -53,7 +53,7 @@ export function buildBlenderBundle(project: Project, result: { build: ProjectBui
   const manifest = buildManifest(project, entries, skipped, includeSuppliedTop)
   const files: Zippable = {}
   for (const e of entries) {
-    files[e.glb] = [cabinetToGlb(e.cabinet, e.build, project, { includeSuppliedTop }), { level: DEFLATE_LEVEL }]
+    files[e.glb] = [cabinetToGlb(e.cabinet, e.build, project, { includeSuppliedTop, includePulls: true }), { level: DEFLATE_LEVEL }]
     const png = options.thumbnails?.get(e.cabinet.id)
     if (e.thumbnail && png) files[e.thumbnail] = [png, { level: STORE }]
   }

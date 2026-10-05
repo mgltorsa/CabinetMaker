@@ -88,8 +88,8 @@ export function ThreeView({ project, result }: ThreeViewProps) {
   const room = view.room && project.room && project.room.walls.length > 0 ? project.room : null
   const centreX = room ? roomCentreX(room) : undefined
   const scene = useMemo(
-    () => buildScene(result.build, project.cabinets, view, { units: project.units, selectedCabinetId, materials: project.materials, centreX }),
-    [result.build, project.cabinets, view, project.units, selectedCabinetId, project.materials, centreX],
+    () => buildScene(result.build, project.cabinets, view, { units: project.units, selectedCabinetId, materials: project.materials, hardware: project.hardware, centreX }),
+    [result.build, project.cabinets, view, project.units, selectedCabinetId, project.materials, project.hardware, centreX],
   )
   const selected = project.cabinets.find((c) => c.id === selectedCabinetId) ?? null
   const dimensionEdits = useDimensionEdits(selected, result.build.cabinets.find((b) => b.cabinetId === selectedCabinetId))

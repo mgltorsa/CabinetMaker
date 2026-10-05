@@ -11,6 +11,7 @@ import { cn } from '../../lib/cn'
 import { MODEL_LIFT, MODEL_SCALE, ROOM_COORD } from '../../lib/limits'
 import { useDesigner } from '../../store'
 import { errorMessage, notify } from '../../toast'
+import { projectBlobRefs } from '../blobRefs'
 import { getBlobStore, unusedBlobIds } from '../blobStore'
 import { downloadProjectBundle } from '../bundleIo'
 import { MODEL_FILE_ACCEPT } from '../format'
@@ -53,7 +54,8 @@ export function ModelsCard({ project }: { project: Project }) {
   const stored = useStoredBlobs(models.map((m) => m.blobId).join(','))
   const isMissing = (m: SceneModel): boolean => stored.ids !== null && !stored.ids.has(m.blobId)
   const missingCount = models.filter(isMissing).length
-  const unused = stored.ids ? unusedBlobIds([...stored.ids], models) : []
+  // Files custom handles use are not "unused" either.
+  const unused = stored.ids ? unusedBlobIds([...stored.ids], projectBlobRefs(project)) : []
   const selected = models.find((m) => m.id === selectedModelId) ?? null
   const units = project.units
 

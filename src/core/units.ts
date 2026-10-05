@@ -1,6 +1,9 @@
-import type { Mm, UnitSystem } from './types'
+import type { Mm, ModelUnit, UnitSystem } from './types'
 
 export const MM_PER_INCH = 25.4
+
+/** Millimetres per unit of an imported model file (models, custom handles). */
+export const MM_PER_MODEL_UNIT: Readonly<Record<ModelUnit, number>> = { m: 1000, cm: 10, mm: 1, in: MM_PER_INCH }
 
 export function inchesToMm(inches: number): Mm {
   return inches * MM_PER_INCH

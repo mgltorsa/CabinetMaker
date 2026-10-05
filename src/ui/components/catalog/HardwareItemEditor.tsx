@@ -2,15 +2,18 @@
 
 import { ChevronRightIcon, CopyIcon, Trash2Icon } from 'lucide-react'
 import { useState } from 'react'
+import { resolveHandle } from '@/core/handles'
 import type { HardwareItem, HardwareKind, Project } from '@/core/types'
 import { HARDWARE_KIND_LABEL, hardwareUses, replacementCandidates, SLOT_KIND, type HardwareUse } from '../../costOps'
 import { money } from '../../lib/format'
-import { HINGE_OPENING_ANGLE, MAX_MONEY, PULL_CENTERS, SLIDE_LENGTH } from '../../lib/limits'
+import { HANDLE_STYLE_LABEL } from '../../handleOps'
+import { HINGE_OPENING_ANGLE, MAX_MONEY, SLIDE_LENGTH } from '../../lib/limits'
 import { SLIDE_MOUNT_PROP } from '../../lib/slides'
 import { useDesigner } from '../../store'
 import { CommitField, LengthInput, NumberInput, SelectField, type SelectOption, TextInput } from '../fields'
 import { Button } from '../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
+import { HandleFields } from './HandleFields'
 
 export const HARDWARE_KINDS: readonly HardwareKind[] = Object.keys(HARDWARE_KIND_LABEL) as HardwareKind[]
 
@@ -70,9 +73,7 @@ function KindProps({ item, project }: ItemProps) {
   if (item.kind === 'hinge') {
     return <NumberInput label="Opening angle" suffix="°" value={item.props.openingAngle ?? 0} min={HINGE_OPENING_ANGLE.min} max={HINGE_OPENING_ANGLE.max} onCommit={set('openingAngle')} />
   }
-  if (item.kind === 'pull') {
-    return <LengthInput label="Pull centres" value={item.props.centers ?? 0} units={units} min={PULL_CENTERS.min} max={PULL_CENTERS.max} onCommit={set('centers')} />
-  }
+  if (item.kind === 'pull') return <HandleFields item={item} project={project} />
   return null
 }
 
@@ -120,6 +121,7 @@ function ReplaceFlow({ item, project, uses }: ItemProps & { uses: HardwareUse[] 
   )
 }
 
+/** `isOpen`: expanded on mount, and again whenever it turns true (an item created by an async import). */
 type HardwareItemEditorProps = ItemProps & { isOpen?: boolean }
 
 /** One catalog item: summary line, every field on expand, duplicate / delete / replace. */
@@ -128,6 +130,12 @@ export function HardwareItemEditor({ item, project, isOpen = false }: HardwareIt
   const duplicate = useDesigner((s) => s.duplicateHardwareItem)
   const remove = useDesigner((s) => s.deleteHardwareItem)
   const set = (patch: Parameters<typeof update>[1]): void => update(item.id, patch)
+  const [open, setOpen] = useState(isOpen)
+  const [lastIsOpen, setLastIsOpen] = useState(isOpen)
+  if (isOpen !== lastIsOpen) {
+    setLastIsOpen(isOpen)
+    if (isOpen) setOpen(true)
+  }
   const uses = hardwareUses(project, item.id)
   const isUsed = uses.length > 0
   const kinds: SelectOption<HardwareKind>[] = HARDWARE_KINDS.map((k) => ({ value: k, label: HARDWARE_KIND_LABEL[k], isDisabled: isUsed && k !== item.kind }))
@@ -137,12 +145,12 @@ export function HardwareItemEditor({ item, project, isOpen = false }: HardwareIt
   }
 
   return (
-    <Collapsible defaultOpen={isOpen} className="group/hw rounded-md border bg-background/60">
+    <Collapsible open={open} onOpenChange={setOpen} className="group/hw rounded-md border bg-background/60">
       <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
         <ChevronRightIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/hw:rotate-90" />
         <span className="min-w-0 flex-1 truncate text-sm">{item.name}</span>
         <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-          {HARDWARE_KIND_LABEL[item.kind]} · {money(item.unitCost, project.estimate.currency)}
+          {item.kind === 'pull' ? HANDLE_STYLE_LABEL[resolveHandle(item).style] : HARDWARE_KIND_LABEL[item.kind]} · {money(item.unitCost, project.estimate.currency)}
         </span>
       </CollapsibleTrigger>
       <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">

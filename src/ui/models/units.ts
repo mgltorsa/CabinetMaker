@@ -4,9 +4,9 @@
  * user can correct it.
  */
 import type { ModelFormat, ModelUnit, UnitSystem, Vec3 } from '@/core/types'
-import { formatLength } from '@/core/units'
+import { formatLength, MM_PER_MODEL_UNIT } from '@/core/units'
 
-export const MM_PER_MODEL_UNIT: Readonly<Record<ModelUnit, number>> = { m: 1000, cm: 10, mm: 1, in: 25.4 }
+export { MM_PER_MODEL_UNIT }
 
 export const MODEL_UNITS: readonly { value: ModelUnit; label: string }[] = [
   { value: 'm', label: 'Metres' },

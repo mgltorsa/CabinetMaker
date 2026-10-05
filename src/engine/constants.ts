@@ -130,9 +130,18 @@ export const MIN_WEB_BETWEEN_HOLES: Mm = 2
 
 /** Pulls. */
 export const PULL_HOLE_DIAMETER: Mm = 5
-export const DEFAULT_PULL_CENTERS: Mm = 128
+/** Hole spacing of a pull without `props.centers` (defined with the handle styles). */
+export { DEFAULT_PULL_CENTERS } from '@/core/handles'
 export const DOOR_PULL_EDGE_OFFSET: Mm = 40
 export const DOOR_PULL_END_OFFSET: Mm = 80
+/**
+ * Edge pulls screw into the inside face this far from the grip edge (centre of
+ * the screw), typical for aluminium edge pulls with a ~20 mm back flange.
+ */
+export const EDGE_PULL_HOLE_INSET: Mm = 10
+/** Blind depth of edge-pull screw holes (pilot / insert bore), clamped to 2/3 of the front thickness. */
+export const EDGE_PULL_SCREW_DEPTH: Mm = 10
+export const EDGE_PULL_MAX_DEPTH_RATIO = 2 / 3
 /** Drawer fronts wider than this get two pulls. */
 export const WIDE_DRAWER_WIDTH: Mm = 600
 /** Single doors wider than this trigger an info warning. */
