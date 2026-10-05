@@ -2,20 +2,18 @@
  * Front elevation: looking at the cabinet front. Cabinet X → drawing X,
  * cabinet Y → drawing Y. Fronts are filled so they hide the carcass behind.
  */
-import type { Cabinet, CabinetBuild, Drawing, DrawingDimId, Mm, Part, PartGroup, Shape, UnitSystem } from '@/core/types'
+import { resolveHandle, type ResolvedHandle } from '@/core/handles'
+import type { Cabinet, CabinetBuild, Drawing, DrawingDimId, HardwareItem, Mm, Part, PartGroup, Shape, UnitSystem } from '@/core/types'
 import { formatLength } from '@/core/units'
 import { makeDrawing } from './bounds'
-import { hingeSide, isDoor, project, pullPoints, union } from './part-geometry'
+import { hingeSide, isDoor, project, union } from './part-geometry'
+import { pullMarks } from './pull-marks'
 import { floorLine, horizontalDims, mountingNote, verticalDims } from './envelope-dims'
 import { frontDimId, frontRefOf } from './dim-ids'
-import { circle, dim, line, rect, withId, type Range2 } from './shapes'
+import { dim, line, rect, withId, type Range2 } from './shapes'
 import { FILL_FRONT, type DrawingStyle } from './style'
 
 const VISIBLE_GROUPS: readonly PartGroup[] = ['carcass', 'divider', 'face-frame', 'toe-kick', 'top', 'stretcher']
-/** Schematic pull length for hand-made (frame-less) fronts without pull holes (typical 128 mm c/c bar). */
-const DEFAULT_PULL: Mm = 128
-const PULL_EDGE_INSET: Mm = 40
-const PULL_END_INSET: Mm = 60
 const EPS: Mm = 0.5
 
 const xy = (p: Part): Range2 => project(p, 'x', 'y')
@@ -76,41 +74,6 @@ function doorSwing(part: Part, cabinet: Cabinet): Shape[] {
   return [line(latchX, r.y0, hingeX, midY, 'hidden'), line(latchX, r.y1, hingeX, midY, 'hidden')]
 }
 
-function pullMarks(part: Part, cabinet: Cabinet, style: DrawingStyle): Shape[] {
-  const points = pullPoints(part)
-  const dot = style.textSize * 0.2
-  if (points.length > 0) {
-    const sorted = [...points].sort((a, b) => a.y - b.y || a.x - b.x)
-    const marks: Shape[] = sorted.map((p) => circle(p.x, p.y, dot, 'outline'))
-    for (let i = 0; i + 1 < sorted.length; i += 2) {
-      const a = sorted[i]
-      const b = sorted[i + 1]
-      if (a && b) marks.push(line(a.x, a.y, b.x, b.y, 'outline'))
-    }
-    return marks
-  }
-  // Engine-built parts (they carry a `frame`) are authoritative: no pull holes
-  // means the engine deliberately omitted the pull (e.g. a front too short for
-  // the pull's centres). Only frame-less, hand-made parts get a schematic pull.
-  if (part.frame !== undefined || cabinet.hardware.pullId === null) return []
-  const r = xy(part)
-  const w = r.x1 - r.x0
-  const h = r.y1 - r.y0
-  if (!isDoor(part)) {
-    const len = Math.min(DEFAULT_PULL, w * 0.5)
-    const cx = (r.x0 + r.x1) / 2
-    const cy = (r.y0 + r.y1) / 2
-    return [line(cx - len / 2, cy, cx + len / 2, cy, 'outline')]
-  }
-  const len = Math.min(DEFAULT_PULL, h * 0.4)
-  const inset = Math.min(PULL_EDGE_INSET, w * 0.15)
-  const x = hingeSide(part, cabinet) === 'left' ? r.x1 - inset : r.x0 + inset
-  const end = Math.min(PULL_END_INSET, h * 0.1)
-  const nearBottom = cabinet.type === 'wall'
-  const ya = nearBottom ? r.y0 + end : r.y1 - end - len
-  return [line(x, ya, x, ya + len, 'outline')]
-}
-
 /**
  * Fronts grouped into side-by-side columns (fronts whose x ranges overlap),
  * left to right. A height chain is only meaningful within one column: chaining
@@ -162,7 +125,7 @@ function toeKickHeight(cabinet: Cabinet, parts: readonly Part[]): Mm {
   return carcass.length > 0 ? Math.min(...carcass.map((p) => p.bounds.min.y)) : 0
 }
 
-function frontShapes(cabinet: Cabinet, parts: readonly Part[], units: UnitSystem, style: DrawingStyle): Shape[] {
+function frontShapes(cabinet: Cabinet, parts: readonly Part[], units: UnitSystem, style: DrawingStyle, handle: ResolvedHandle | null): Shape[] {
   const visible = parts.filter((p) => VISIBLE_GROUPS.includes(p.group))
   const fronts = parts.filter((p) => p.group === 'front')
   const shelves = parts.filter((p) => p.group === 'shelf')
@@ -180,7 +143,7 @@ function frontShapes(cabinet: Cabinet, parts: readonly Part[], units: UnitSystem
   fronts.forEach((f) => {
     shapes.push(rect(xy(f), 'outline', FILL_FRONT))
     if (isDoor(f)) shapes.push(...doorSwing(f, cabinet))
-    shapes.push(...pullMarks(f, cabinet, style))
+    shapes.push(...pullMarks(f, cabinet, handle, style))
   })
   shapes.push(...rodShapes(parts, fronts))
 
@@ -208,11 +171,22 @@ function frontShapes(cabinet: Cabinet, parts: readonly Part[], units: UnitSystem
   return shapes
 }
 
-export function frontElevation(cabinet: Cabinet, build: CabinetBuild, units: UnitSystem): Drawing {
+export interface FrontElevationOptions {
+  /** Project hardware catalog: draws each pull in its handle style. Absent = bar marks from the pull holes. */
+  hardware?: readonly HardwareItem[]
+}
+
+function cabinetHandle(cabinet: Cabinet, hardware: readonly HardwareItem[] | undefined): ResolvedHandle | null {
+  const item = hardware?.find((h) => h.id === cabinet.hardware.pullId && h.kind === 'pull')
+  return item ? resolveHandle(item) : null
+}
+
+export function frontElevation(cabinet: Cabinet, build: CabinetBuild, units: UnitSystem, options: FrontElevationOptions = {}): Drawing {
   const top = synthesizedTop(cabinet, build.parts)
   const parts = top ? [...build.parts, top] : build.parts
   const extent = Math.max(cabinet.width, cabinet.height, 1)
+  const handle = cabinetHandle(cabinet, options.hardware)
   return makeDrawing(`${cabinet.id}:front`, `${cabinet.name} - front elevation`, extent, units, (style) =>
-    frontShapes(cabinet, parts, units, style),
+    frontShapes(cabinet, parts, units, style, handle),
   )
 }

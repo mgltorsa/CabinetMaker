@@ -5,6 +5,7 @@ import {
   type ConstructionMethod,
   type EstimateSettings,
   type ExtraCharge,
+  type HandleSpec,
   type HardwareItem,
   type LinearMaterial,
   type Machine,
@@ -22,6 +23,8 @@ import {
   CABINET_DIMENSION,
   EXTRA_QTY,
   FLOOR_HEIGHT,
+  HANDLE_DIMENSION,
+  HANDLE_PROJECTION,
   MARKUP,
   MAX_BAYS,
   MAX_CABINETS,
@@ -204,15 +207,43 @@ const material: Check<Material> = (v, p) => {
   return `${p}.kind must be sheet or linear`
 }
 
-const hardwareItem = obj<HardwareItem>({
-  id: str,
-  kind: oneOf('hinge', 'hinge-plate', 'slide', 'pull', 'shelf-pin', 'dowel', 'domino', 'leg', 'screw', 'other', 'rod-support'),
-  name: str,
-  manufacturer: str,
-  sku: str,
-  unitCost: nonNegative(),
-  props: recordOf(num),
-})
+const modelFormat = oneOf('glb', 'gltf', 'obj', 'stl')
+const modelUnit = oneOf('m', 'cm', 'mm', 'in')
+// Blob ids name zip entries on export: no path separators.
+const blobId = refine(str, (v, p) => (isBlobId(v) ? null : `${p} must be a lowercase content id (a-z, 0-9, -)`))
+const nativeSize = numIn(MODEL_NATIVE_SIZE)
+const handleDimension = optional(numIn(HANDLE_DIMENSION))
+
+const handleSpec = refine(
+  obj<HandleSpec>({
+    style: oneOf('bar', 'knob', 'edge', 'cup', 'j-profile', 'custom'),
+    length: handleDimension,
+    width: handleDimension,
+    diameter: handleDimension,
+    projection: optional(numIn(HANDLE_PROJECTION)),
+    color: optional(hexColor),
+    blobId: optional(blobId),
+    format: optional(modelFormat),
+    unit: optional(modelUnit),
+    nativeSize: optional(obj({ x: nativeSize, y: nativeSize, z: nativeSize })),
+  }),
+  // A model reference is all or nothing: the viewer and the .zip bundle need every field.
+  (h, p) => (h.blobId !== undefined && (h.format === undefined || h.unit === undefined || h.nativeSize === undefined) ? `${p}.blobId needs format, unit and nativeSize` : null),
+)
+
+const hardwareItem = refine(
+  obj<HardwareItem>({
+    id: str,
+    kind: oneOf('hinge', 'hinge-plate', 'slide', 'pull', 'shelf-pin', 'dowel', 'domino', 'leg', 'screw', 'other', 'rod-support'),
+    name: str,
+    manufacturer: str,
+    sku: str,
+    unitCost: nonNegative(),
+    props: recordOf(num),
+    handle: optional(handleSpec),
+  }),
+  (h, p) => (h.handle !== undefined && h.kind !== 'pull' ? `${p}.handle is only allowed on a pull` : null),
+)
 
 const tool = refine(
   obj<Tool>({
@@ -311,15 +342,13 @@ const room = obj<Room>({
 })
 
 const roomCoord = numIn(ROOM_COORD)
-const nativeSize = numIn(MODEL_NATIVE_SIZE)
 
 const sceneModel = obj<SceneModel>({
   id: str,
   name: str,
-  format: oneOf('glb', 'gltf', 'obj', 'stl'),
-  // Blob ids name zip entries on export: no path separators.
-  blobId: refine(str, (v, p) => (isBlobId(v) ? null : `${p} must be a lowercase content id (a-z, 0-9, -)`)),
-  unit: oneOf('m', 'cm', 'mm', 'in'),
+  format: modelFormat,
+  blobId,
+  unit: modelUnit,
   nativeSize: obj({ x: nativeSize, y: nativeSize, z: nativeSize }),
   position: obj({ x: roomCoord, y: numIn(MODEL_LIFT), z: roomCoord }),
   rotationYDeg: num,

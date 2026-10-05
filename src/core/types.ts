@@ -100,6 +100,45 @@ export interface HardwareItem {
   unitCost: number
   /** Kind-specific numeric properties, e.g. slide `length`, hinge `openingAngle`. */
   props: Record<string, number>
+  /**
+   * Pulls only: the handle's style and size. Absent = a bar pull (the
+   * behaviour before handle styles existed). Hole spacing stays in
+   * `props.centers`.
+   */
+  handle?: HandleSpec
+}
+
+// ─── Handles (pull styles) ──────────────────────────────────────────────────
+
+/**
+ * - `bar`: rod on two posts, two through holes at `props.centers`.
+ * - `knob`: one through hole.
+ * - `edge`: metal angle over the front's grip edge, two blind screw holes on the inside face.
+ * - `cup`: cup / bin pull, two through holes at `props.centers`.
+ * - `j-profile`: lip along the grip edge; no holes.
+ * - `custom`: an imported model; two holes at `props.centers`, one when centres are under 16 mm.
+ */
+export type HandleStyle = 'bar' | 'knob' | 'edge' | 'cup' | 'j-profile' | 'custom'
+
+/** Size and look of a pull. Every field but `style` is optional; absent fields take the style's defaults. */
+export interface HandleSpec {
+  style: HandleStyle
+  /** Overall length along the pull (bar, edge, cup, custom). A J-profile spans the whole front. */
+  length?: Mm
+  /** Size across the pull: cup height, edge/J-profile lip height. */
+  width?: Mm
+  /** Bar / knob diameter; sheet thickness of edge and J-profiles. */
+  diameter?: Mm
+  /** How far the grip stands off the front's show face. */
+  projection?: Mm
+  /** Display colour (`#rrggbb`); absent = brushed steel. */
+  color?: string
+  /** Custom handles: the imported model, stored like `SceneModel` files (model store / project .zip). */
+  blobId?: Id
+  format?: ModelFormat
+  unit?: ModelUnit
+  /** Model bounding-box size in the file's own units. */
+  nativeSize?: Vec3
 }
 
 // ─── Construction method ────────────────────────────────────────────────────

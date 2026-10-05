@@ -12,6 +12,7 @@ import type {
   CabinetType,
   ConstructionMethod,
   EstimateSettings,
+  HandleStyle,
   HardwareKind,
   HangingRod,
   Id,
@@ -31,6 +32,7 @@ import { browserStorage, loadProject, REJECTED_STORAGE_KEY } from './persistence
 import { notify } from './toast'
 import * as ops from './projectOps'
 import * as costOps from './costOps'
+import * as handleOps from './handleOps'
 
 /** What the 3D view shows (the floating "Toggle visibility" pills). */
 export interface ViewToggles {
@@ -136,6 +138,10 @@ export interface DesignerActions {
   deleteHardwareItem: (id: Id) => void
   /** Moves every cabinet onto `replacementId` (null: no pull), then deletes the item. */
   replaceHardwareItem: (id: Id, replacementId: Id | null) => void
+  /** Handle types: a new pull of `style` (its id, or null at the catalog limit). */
+  addHandleItem: (style: HandleStyle) => Id | null
+  /** Edit a pull's handle (style, sizes, colour); `undefined` fields go back to the style default. */
+  updateHandle: (id: Id, patch: handleOps.HandlePatch) => void
   /** Estimate extra charges (03·3). */
   addExtraCharge: () => void
   updateExtraCharge: (id: Id, patch: costOps.ExtraChargePatch) => void
@@ -264,6 +270,12 @@ export function createDesignerStore(initial: Project = createProject()): Designe
       duplicateHardwareItem: (id) => edit((p) => costOps.duplicateHardwareItem(p, id).project),
       deleteHardwareItem: (id) => edit((p) => costOps.deleteHardwareItem(p, id)),
       replaceHardwareItem: (id, replacementId) => edit((p) => costOps.replaceHardwareItem(p, id, replacementId)),
+      addHandleItem: (style) => {
+        const added = handleOps.addHandleItem(get().project, style)
+        if (added.id !== null) set({ project: added.project })
+        return added.id
+      },
+      updateHandle: (id, patch) => edit((p) => handleOps.updateHandle(p, id, patch)),
       addExtraCharge: () => edit((p) => costOps.addExtraCharge(p).project),
       updateExtraCharge: (id, patch) => edit((p) => costOps.updateExtraCharge(p, id, patch)),
       removeExtraCharge: (id) => edit((p) => costOps.removeExtraCharge(p, id)),

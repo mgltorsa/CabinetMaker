@@ -8,12 +8,16 @@
  * translated to the part's bounds centre and its vertices are relative to that
  * centre, so every part keeps a sensible pivot in Blender. Nodes carry no
  * rotation or scale. Doors and drawers are exported closed.
+ *
+ * With `includePulls`, each front node gets one child node per pull
+ * (`glbPulls`), translated relative to the front.
  */
 import type { Cabinet, CabinetBuild, Part, Project } from '@/core/types'
 import { synthesizedTop } from '@/drawings/front-elevation'
-import { BOX_INDEX_COUNT, BOX_INDICES, BOX_NORMALS, BOX_VERTEX_COUNT, boxPositions } from './box'
+import { boxGeometry, INDEX_ACCESSOR, NORMAL_ACCESSOR, type GeoBox, type Triple } from './boxGeometry'
 import { FINISH_BY_GROUP, FINISH_LOOK, linearRgba, type Finish } from './finish'
-import { BinaryWriter, encodeGlb } from './glb'
+import { encodeGlb } from './glb'
+import { cabinetPull, exportPulls, pullMaterialJson } from './glbPulls'
 
 export const GLB_GENERATOR = 'CabinetMaker glTF exporter'
 /** Recorded in extras so importers can tell where the asset came from. */
@@ -23,19 +27,16 @@ const MM_PER_M = 1000
 /** Degenerate (zero-thickness) parts still get a visible box, as in the 3D view. */
 const MIN_SIZE_MM = 0.1
 
-// glTF enums (spec §5): component types, buffer targets, primitive mode.
-const FLOAT = 5126
-const UNSIGNED_SHORT = 5123
-const ARRAY_BUFFER = 34962
-const ELEMENT_ARRAY_BUFFER = 34963
+// glTF primitive mode (spec §5).
 const TRIANGLES = 4
-const VEC3_BYTES = 12
 
 export interface CabinetGlbOptions {
   /** Include a countertop/top supplied separately (not a cut part), like the 3D view. Default true. */
   includeSuppliedTop?: boolean
   /** `asset.generator`. */
   generator?: string
+  /** Add the cabinet's pulls as child nodes of the fronts (the Blender bundle does). Default false. */
+  includePulls?: boolean
 }
 
 /** JSON-safe scalar metadata (becomes Blender custom properties). */
@@ -129,78 +130,22 @@ function materialJson(slot: MaterialSlot): object {
 
 const AXES = ['x', 'y', 'z'] as const
 
-function partBox(part: Part): { centre: [number, number, number]; size: [number, number, number] } {
+function partBox(part: Part): { centre: Triple; size: Triple } {
   const { min, max } = part.bounds
   const [cx, cy, cz] = AXES.map((k) => (min[k] + max[k]) / 2 / MM_PER_M)
   const [sx, sy, sz] = AXES.map((k) => Math.max(max[k] - min[k], MIN_SIZE_MM) / MM_PER_M)
   return { centre: [cx ?? 0, cy ?? 0, cz ?? 0], size: [sx ?? 0, sy ?? 0, sz ?? 0] }
 }
 
-function minMax(values: Float32Array): { min: number[]; max: number[] } {
-  const min = [Infinity, Infinity, Infinity]
-  const max = [-Infinity, -Infinity, -Infinity]
-  values.forEach((v, i) => {
-    const c = i % 3
-    min[c] = Math.min(min[c]!, v)
-    max[c] = Math.max(max[c]!, v)
-  })
-  return { min, max }
+/** A material name not yet used (a pull item's name may repeat a project material's). */
+function unusedName(base: string, used: ReadonlySet<string>): string {
+  if (!used.has(base)) return base
+  let n = 2
+  while (used.has(`${base} (${n})`)) n++
+  return `${base} (${n})`
 }
 
 // ─── Document ───────────────────────────────────────────────────────────────
-
-/** Accessor indices fixed by `partGeometry`: every box shares one normal and one index accessor. */
-const NORMAL_ACCESSOR = 0
-const INDEX_ACCESSOR = 1
-const POSITION_VIEW = 2
-
-interface PartGeometry {
-  bin: Uint8Array
-  bufferViews: object[]
-  accessors: object[]
-  /** Per part, in order: its POSITION accessor and its node translation (metres). */
-  positionAccessors: number[]
-  centres: [number, number, number][]
-}
-
-/**
- * Binary layout: shared normals, shared indices, then every part's 24
- * positions back to back in one strided bufferView (one accessor per part).
- */
-function partGeometry(parts: readonly Part[]): PartGeometry {
-  const bin = new BinaryWriter()
-  const normals = bin.append(BOX_NORMALS)
-  const indices = bin.append(BOX_INDICES)
-  const boxes = parts.map(partBox)
-  const positions = boxes.map((b) => boxPositions(b.size))
-  const positionStart = bin.byteLength
-  for (const p of positions) bin.append(p)
-  const positionBytes = BOX_VERTEX_COUNT * VEC3_BYTES
-
-  const shared = [
-    { bufferView: 0, componentType: FLOAT, count: BOX_VERTEX_COUNT, type: 'VEC3' },
-    { bufferView: 1, componentType: UNSIGNED_SHORT, count: BOX_INDEX_COUNT, type: 'SCALAR' },
-  ]
-  const perPart = positions.map((p, i) => ({
-    bufferView: POSITION_VIEW,
-    byteOffset: i * positionBytes,
-    componentType: FLOAT,
-    count: BOX_VERTEX_COUNT,
-    type: 'VEC3',
-    ...minMax(p),
-  }))
-  return {
-    bin: bin.toBytes(),
-    bufferViews: [
-      { buffer: 0, ...normals, byteStride: VEC3_BYTES, target: ARRAY_BUFFER },
-      { buffer: 0, ...indices, target: ELEMENT_ARRAY_BUFFER },
-      { buffer: 0, byteOffset: positionStart, byteLength: positionBytes * parts.length, byteStride: VEC3_BYTES, target: ARRAY_BUFFER },
-    ],
-    accessors: [...shared, ...perPart],
-    positionAccessors: perPart.map((_, i) => shared.length + i),
-    centres: boxes.map((b) => b.centre),
-  }
-}
 
 /** Serialize one cabinet (closed doors and drawers) as a GLB file. */
 export function cabinetToGlb(cabinet: Cabinet, cabinetBuild: CabinetBuild, project: Project, options: CabinetGlbOptions = {}): Uint8Array {
@@ -222,29 +167,45 @@ export function cabinetToGlb(cabinet: Cabinet, cabinetBuild: CabinetBuild, proje
 
   const slots = materialSlots(parts, project, suppliedIds)
   const slotIndex = new Map(slots.map((s, i) => [s.key, i]))
-  const geometry = partGeometry(parts)
-  const meshes = parts.map((part, i) => ({
-    name: part.name,
-    primitives: [
-      {
-        attributes: { POSITION: geometry.positionAccessors[i], NORMAL: NORMAL_ACCESSOR },
-        indices: INDEX_ACCESSOR,
-        material: slotIndex.get(slotKey(part)) ?? 0,
-        mode: TRIANGLES,
-      },
-    ],
-  }))
-  const partNodes = parts.map((part, i) => ({
-    name: part.name,
-    mesh: i,
-    translation: geometry.centres[i],
-    extras: partExtras(part, project, suppliedIds.has(part.id)),
-  }))
+  const boxes = parts.map(partBox)
+  const centres = boxes.map((b) => b.centre)
+  const pull = options.includePulls ? cabinetPull(cabinet, project) : null
+  const pulls = pull ? exportPulls(parts, cabinet, pull, centres) : []
+  // Part boxes first (accessor i ↔ part i), then every pull's boxes in order.
+  const geometry = boxGeometry([...boxes.map((b): GeoBox => ({ size: b.size, offset: [0, 0, 0] })), ...pulls.flatMap((p) => p.boxes)])
+  const primitive = (accessor: number | undefined, material: number): object => ({
+    attributes: { POSITION: accessor, NORMAL: NORMAL_ACCESSOR },
+    indices: INDEX_ACCESSOR,
+    material,
+    mode: TRIANGLES,
+  })
+  const meshes: object[] = parts.map((part, i) => ({ name: part.name, primitives: [primitive(geometry.positionAccessors[i], slotIndex.get(slotKey(part)) ?? 0)] }))
+  const materials = slots.map(materialJson)
+  const pullMaterial = materials.length
+  if (pull && pulls.length > 0) materials.push(pullMaterialJson(pull, unusedName(pull.item.name, new Set(slots.map((s) => s.name)))))
+
+  const pullChildren = new Map<number, number[]>()
+  let nextBox = parts.length
+  const pullNodes = pulls.map((p, k) => {
+    pullChildren.set(p.partIndex, [...(pullChildren.get(p.partIndex) ?? []), 1 + parts.length + k])
+    meshes.push({ name: p.name, primitives: p.boxes.map(() => primitive(geometry.positionAccessors[nextBox++], pullMaterial)) })
+    return { name: p.name, mesh: parts.length + k, translation: p.translation, extras: p.extras }
+  })
+  const partNodes = parts.map((part, i) => {
+    const children = pullChildren.get(i)
+    return {
+      name: part.name,
+      mesh: i,
+      translation: centres[i],
+      ...(children ? { children } : {}),
+      extras: partExtras(part, project, suppliedIds.has(part.id)),
+    }
+  })
   const json = {
     ...document,
-    nodes: [root, ...partNodes],
+    nodes: [root, ...partNodes, ...pullNodes],
     meshes,
-    materials: slots.map(materialJson),
+    materials,
     accessors: geometry.accessors,
     bufferViews: geometry.bufferViews,
     buffers: [{ byteLength: geometry.bin.byteLength }],

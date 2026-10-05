@@ -3,15 +3,15 @@
  * drawing as the Elevation view) drawn onto an offscreen canvas and saved as a
  * square PNG. Browser only (canvas); `thumbnailSvg` and `containRect` are pure.
  */
-import type { Cabinet, CabinetBuild, Project, UnitSystem } from '@/core/types'
+import type { Cabinet, CabinetBuild, HardwareItem, Project, UnitSystem } from '@/core/types'
 import { frontElevation, renderSvg } from '@/drawings'
 import type { PipelineResult } from '@/pipeline'
 
 export const THUMBNAIL_PX = 512
 const BACKGROUND = '#ffffff'
 
-export function thumbnailSvg(cabinet: Cabinet, build: CabinetBuild, units: UnitSystem): string {
-  return renderSvg(frontElevation(cabinet, build, units), { units, widthPx: THUMBNAIL_PX })
+export function thumbnailSvg(cabinet: Cabinet, build: CabinetBuild, units: UnitSystem, hardware?: readonly HardwareItem[]): string {
+  return renderSvg(frontElevation(cabinet, build, units, { hardware }), { units, widthPx: THUMBNAIL_PX })
 }
 
 /** Largest rectangle with the image's aspect ratio centred in a `size` square. */
@@ -73,7 +73,7 @@ export async function renderCabinetThumbnails(project: Project, result: Pick<Pip
   const buildsById = new Map(result.build.cabinets.map((b) => [b.cabinetId, b]))
   const jobs = project.cabinets.flatMap((cabinet) => {
     const build = buildsById.get(cabinet.id)
-    return build ? [{ cabinet, png: svgToPng(thumbnailSvg(cabinet, build, project.units)) }] : []
+    return build ? [{ cabinet, png: svgToPng(thumbnailSvg(cabinet, build, project.units, project.hardware)) }] : []
   })
   const settled = await Promise.allSettled(jobs.map((j) => j.png))
   const thumbnails = new Map<string, Uint8Array>()

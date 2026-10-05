@@ -101,7 +101,7 @@ export function Workspace({ project, result }: WorkspaceProps) {
                 <ThreeView project={project} result={result} />
               </div>
             )}
-            {v.value === 'front' && <ElevationView kind="front" cabinet={cabinet} result={result} units={project.units} />}
+            {v.value === 'front' && <ElevationView kind="front" cabinet={cabinet} result={result} units={project.units} hardware={project.hardware} />}
             {v.value === 'side' && <ElevationView kind="side" cabinet={cabinet} result={result} units={project.units} />}
             {v.value === 'joinery' && <JoineryView project={project} cabinet={cabinet} result={result} />}
           </ErrorBoundary>

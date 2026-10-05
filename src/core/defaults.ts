@@ -62,6 +62,16 @@ const sideMountSlide = (lengthMm: number, cost: number): HardwareItem => ({
   props: { length: lengthMm, mount: 1 },
 })
 
+/** Built-in handle types beyond the default bar pull (see `core/handles` for the style sizes). */
+const DEFAULT_HANDLE_ITEMS: HardwareItem[] = [
+  { id: 'pull-bar-320', kind: 'pull', name: 'Bar pull 320 mm c/c', manufacturer: 'Generic', sku: 'BAR-320', unitCost: 9, props: { centers: 320 }, handle: { style: 'bar', length: 350 } },
+  { id: 'pull-knob-30', kind: 'pull', name: 'Round knob Ø30', manufacturer: 'Generic', sku: 'KNOB-30', unitCost: 3, props: { centers: 0 }, handle: { style: 'knob', diameter: 30, projection: 28 } },
+  { id: 'pull-edge-150', kind: 'pull', name: 'Edge pull 150 mm', manufacturer: 'Generic', sku: 'EDGE-150', unitCost: 7, props: { centers: 128 }, handle: { style: 'edge', length: 150 } },
+  { id: 'pull-cup-96', kind: 'pull', name: 'Cup pull 96 mm c/c', manufacturer: 'Generic', sku: 'CUP-96', unitCost: 5, props: { centers: 96 }, handle: { style: 'cup', length: 128, width: 40 } },
+  // Priced per front: one piece cut to the front's width.
+  { id: 'pull-j-profile', kind: 'pull', name: 'J-profile handle (per front)', manufacturer: 'Generic', sku: 'JPROF', unitCost: 6, props: { centers: 0 }, handle: { style: 'j-profile' } },
+]
+
 export const DEFAULT_HARDWARE: HardwareItem[] = [
   undermountSlide(229, 'TANDEM 563H2290B', 28),
   undermountSlide(305, 'TANDEM 563H3050B', 30),
@@ -76,7 +86,14 @@ export const DEFAULT_HARDWARE: HardwareItem[] = [
   sideMountSlide(550, 17),
   { id: 'blum-cliptop-110', kind: 'hinge', name: 'Concealed hinge 110°, full overlay', manufacturer: 'Blum', sku: 'CLIP top 71B3550', unitCost: 6.5, props: { openingAngle: 110, cupDiameter: 35 } },
   { id: 'blum-plate-0', kind: 'hinge-plate', name: 'Hinge mounting plate 0 mm', manufacturer: 'Blum', sku: 'CLIP 173L6100', unitCost: 2.2, props: { height: 0 } },
+  // No `handle`: a bar pull (the default cabinet's pull; kept as it was before handle styles).
   { id: 'pull-bar-128', kind: 'pull', name: 'Bar pull 128 mm c/c', manufacturer: 'Generic', sku: 'BAR-128', unitCost: 4, props: { centers: 128 } },
+  /*
+   * More handle types. Generic example parts: sizes are typical catalogue
+   * figures (32 mm-system hole centres) and prices placeholders; verify both
+   * with the supplier. Knobs and J-profiles take `centers: 0` (one hole / none).
+   */
+  ...DEFAULT_HANDLE_ITEMS,
   { id: 'pin-5', kind: 'shelf-pin', name: 'Shelf pin 5 mm', manufacturer: 'Generic', sku: 'PIN-5', unitCost: 0.15, props: { diameter: 5 } },
   { id: 'dowel-8x30', kind: 'dowel', name: 'Dowel 8 × 30 mm', manufacturer: 'Generic', sku: 'DOWEL-8x30', unitCost: 0.05, props: { diameter: 8, length: 30 } },
   { id: 'domino-5x30', kind: 'domino', name: 'Domino tenon 5 × 30 mm', manufacturer: 'Festool', sku: '494938', unitCost: 0.12, props: { thickness: 5, length: 30 } },

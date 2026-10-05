@@ -114,7 +114,11 @@ export function updateHardwareItem(project: Project, id: Id, patch: HardwarePatc
   if (!item) return project
   const changesKind = patch.kind !== undefined && patch.kind !== item.kind
   if (changesKind && hardwareUses(project, id).length > 0) return project
-  return mapItem(project, id, (h) => ({ ...h, ...patch, props: changesKind && patch.kind ? { ...DEFAULT_HARDWARE_PROPS[patch.kind] } : h.props }))
+  return mapItem(project, id, (h) => {
+    const next: HardwareItem = { ...h, ...patch, props: changesKind && patch.kind ? { ...DEFAULT_HARDWARE_PROPS[patch.kind] } : h.props }
+    if (changesKind) delete next.handle // a handle belongs to pulls only; a new pull starts as a bar
+    return next
+  })
 }
 
 export function setHardwareProp(project: Project, id: Id, key: string, value: number): Project {
@@ -132,6 +136,7 @@ export function duplicateHardwareItem(project: Project, id: Id): { project: Proj
     id: copyId,
     name: uniqueName(`${source.name} copy`, project.hardware.map((h) => h.name)),
     props: { ...source.props },
+    ...(source.handle ? { handle: structuredClone(source.handle) } : {}),
   }
   const hardware = [...project.hardware.slice(0, index + 1), copy, ...project.hardware.slice(index + 1)]
   return { project: { ...project, hardware }, copyId }

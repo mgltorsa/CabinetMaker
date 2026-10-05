@@ -98,7 +98,11 @@ export function rodMaterialOptions(project: Project): SelectOption<string>[] {
   return project.materials.filter((m) => m.kind === 'linear' && m.profile === 'round').map((m) => ({ value: m.id, label: m.name }))
 }
 
-const hardwareOption = (h: HardwareItem): SelectOption<string> => ({ value: h.id, label: `${h.name} (${h.manufacturer} ${h.sku})` })
+/** `Name (Manufacturer SKU)`, leaving out empty parts (a new item has neither). */
+const hardwareOption = (h: HardwareItem): SelectOption<string> => {
+  const source = [h.manufacturer, h.sku].filter((s) => s !== '').join(' ')
+  return { value: h.id, label: source === '' ? h.name : `${h.name} (${source})` }
+}
 
 export function hardwareOptions(project: Project, kind: HardwareKind): SelectOption<string>[] {
   return project.hardware.filter((h) => h.kind === kind).map(hardwareOption)

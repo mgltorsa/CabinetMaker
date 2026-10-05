@@ -3,6 +3,7 @@
  * check → read → hash → parse → store bytes → add the model to the project.
  * three and its loaders load on first use.
  */
+import type { ModelFormat } from '@/core/types'
 import { MAX_MODELS } from '../lib/limits'
 import { getDesignerStore } from '../store'
 import { errorMessage, notify } from '../toast'
@@ -10,13 +11,25 @@ import { contentId, getBlobStore } from './blobStore'
 import { checkModelFile, modelNameFromFile } from './format'
 import { addModel, newSceneModel } from './modelOps'
 import { useModelUi } from './modelUi'
+import type { ParsedModel } from './loaders'
 import { guessModelUnit, modelSizeMm, sizeLabel } from './units'
 
-async function importOne(file: File): Promise<void> {
+export interface StoredModelFile {
+  format: ModelFormat
+  blobId: string
+  parsed: ParsedModel
+}
+
+/**
+ * Check, parse and store one model file (shared by scene models and custom
+ * handles). `null` after a toast when the file is refused; throws when it
+ * cannot be parsed or stored.
+ */
+export async function storeModelFile(file: File): Promise<StoredModelFile | null> {
   const check = checkModelFile(file.name, file.size)
   if (!check.ok) {
     notify('error', check.error)
-    return
+    return null
   }
   const bytes = new Uint8Array(await file.arrayBuffer())
   const blobId = await contentId(bytes)
@@ -27,11 +40,18 @@ async function importOne(file: File): Promise<void> {
   const store = getBlobStore()
   if ((await store.get(blobId)) === null) await store.put(blobId, bytes)
   primeModel(blobId, parsed)
+  return { format: check.format, blobId, parsed }
+}
+
+async function importOne(file: File): Promise<void> {
+  const stored = await storeModelFile(file)
+  if (!stored) return
+  const { format, blobId, parsed } = stored
 
   const designer = getDesignerStore().getState()
   const { importUnit } = useModelUi.getState()
-  const unit = importUnit === 'auto' ? guessModelUnit(check.format, parsed.nativeSize) : importUnit
-  const model = newSceneModel(designer.project, { name: modelNameFromFile(file.name), format: check.format, blobId, nativeSize: parsed.nativeSize }, unit)
+  const unit = importUnit === 'auto' ? guessModelUnit(format, parsed.nativeSize) : importUnit
+  const model = newSceneModel(designer.project, { name: modelNameFromFile(file.name), format, blobId, nativeSize: parsed.nativeSize }, unit)
   designer.editProject((p) => addModel(p, model))
   useModelUi.getState().selectModel(model.id)
   const size = sizeLabel(modelSizeMm(parsed.nativeSize, unit, 1), designer.project.units)

@@ -9,6 +9,7 @@ import { useDesigner } from '../../store'
 import { SelectField, type SelectOption } from '../fields'
 import { SpecCard } from '../sidebar/SpecCard'
 import { Button } from '../ui/button'
+import { HandlesArea } from './HandlesArea'
 import { HARDWARE_KINDS, HardwareItemEditor } from './HardwareItemEditor'
 
 type KindFilter = HardwareKind | 'all'
@@ -29,7 +30,9 @@ export function HardwareCatalog({ project }: { project: Project }) {
   const add = useDesigner((s) => s.addHardwareItem)
   const [filter, setFilter] = useState<KindFilter>('all')
   const [addedId, setAddedId] = useState<Id | null>(null)
-  const items = filter === 'all' ? project.hardware : project.hardware.filter((h) => h.kind === filter)
+  const showsHandles = filter === 'all' || filter === 'pull'
+  // Pulls are listed in the Handles area; the plain list holds everything else.
+  const items = filter === 'all' ? project.hardware.filter((h) => h.kind !== 'pull') : filter === 'pull' ? [] : project.hardware.filter((h) => h.kind === filter)
   const newKind = filter === 'all' ? DEFAULT_NEW_KIND : filter
   const isFull = !canAddHardware(project)
 
@@ -42,7 +45,8 @@ export function HardwareCatalog({ project }: { project: Project }) {
         </Button>
       </div>
       {isFull && <p className="text-xs text-muted-foreground">The catalog holds at most {MAX_CATALOG_ITEMS} items.</p>}
-      {items.length === 0 ? (
+      {showsHandles && <HandlesArea project={project} openId={addedId} onCreated={setAddedId} />}
+      {filter === 'pull' ? null : items.length === 0 ? (
         <p className="text-xs text-muted-foreground">No items of this kind.</p>
       ) : (
         <ul aria-label="Hardware items" className="flex flex-col gap-2">

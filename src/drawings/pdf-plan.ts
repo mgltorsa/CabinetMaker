@@ -84,7 +84,7 @@ function elevationPages(project: Project, result: PipelineResult): PlanPage[] {
       hardware: [],
       warnings: [],
     }
-    const drawings = [frontElevation(cabinet, build, project.units), sideElevation(cabinet, build, project.units)]
+    const drawings = [frontElevation(cabinet, build, project.units, { hardware: project.hardware }), sideElevation(cabinet, build, project.units)]
     return { kind: 'drawings', section: 'Elevations', title: `${cabinet.name} - elevations`, drawings, cols: 2, rows: 1, commonScale: true, captions: true }
   })
 }

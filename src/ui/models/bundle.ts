@@ -1,6 +1,7 @@
 /**
  * Project bundle: one .zip with `project.json` plus every referenced model
- * file under `models/<blobId>.<format>`, so a project with imported models can
+ * file (imported models and custom handles, see `blobRefs`) under
+ * `models/<blobId>.<format>`, so a project with imported models can
  * move between browsers. Reading treats the zip as untrusted: size caps per
  * entry and in total, only referenced entries kept, content ids re-verified.
  */
@@ -8,6 +9,7 @@ import { strToU8, unzipSync, type UnzipFileInfo, zipSync, type Zippable } from '
 import type { Project } from '@/core/types'
 import { MAX_BUNDLE_BYTES, MAX_MODEL_BYTES, MAX_PROJECT_JSON_BYTES } from '../lib/limits'
 import { parseProjectJson } from '../persistence'
+import { projectBlobRefs } from './blobRefs'
 import { contentId, isBlobId } from './blobStore'
 import { isZipBytes } from './format'
 
@@ -22,10 +24,10 @@ export { isZipBytes }
 /** Zip the project and the bytes of every model it references (files missing from `blobs` are skipped). */
 export function buildProjectBundle(project: Project, blobs: ReadonlyMap<string, Uint8Array>): Uint8Array {
   const files: Zippable = { [PROJECT_ENTRY]: strToU8(JSON.stringify(project, null, 2)) }
-  for (const model of project.models ?? []) {
-    const bytes = blobs.get(model.blobId)
-    const name = `${MODELS_DIR}${model.blobId}.${model.format}`
-    if (bytes && isBlobId(model.blobId) && !(name in files)) files[name] = [bytes, { level: MODEL_LEVEL }]
+  for (const ref of projectBlobRefs(project)) {
+    const bytes = blobs.get(ref.blobId)
+    const name = `${MODELS_DIR}${ref.blobId}.${ref.format}`
+    if (bytes && isBlobId(ref.blobId) && !(name in files)) files[name] = [bytes, { level: MODEL_LEVEL }]
   }
   return zipSync(files)
 }
@@ -73,7 +75,7 @@ export async function readProjectBundle(zip: Uint8Array): Promise<BundleRead> {
   const parsed = parseProjectJson(new TextDecoder().decode(json))
   if (!parsed.ok) return parsed
 
-  const referenced = new Set((parsed.project.models ?? []).map((m) => m.blobId))
+  const referenced = new Set(projectBlobRefs(parsed.project).map((r) => r.blobId))
   const blobs = new Map<string, Uint8Array>()
   for (const [name, bytes] of Object.entries(entries)) {
     const id = MODEL_ENTRY.exec(name)?.[1]

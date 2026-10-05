@@ -8,6 +8,7 @@ import { downloadBlob, slugify } from '../lib/download'
 import { MAX_BUNDLE_BYTES } from '../lib/limits'
 import { type ParseResult, parseProjectJson } from '../persistence'
 import { notify } from '../toast'
+import { projectBlobRefs } from './blobRefs'
 import { getBlobStore } from './blobStore'
 import { isZipBytes } from './format'
 import { useModelUi } from './modelUi'
@@ -20,11 +21,10 @@ export async function downloadProjectBundle(project: Project): Promise<void> {
   const store = getBlobStore()
   const blobs = new Map<string, Uint8Array>()
   const missing: string[] = []
-  for (const model of project.models ?? []) {
-    if (blobs.has(model.blobId)) continue
-    const bytes = await store.get(model.blobId)
-    if (bytes) blobs.set(model.blobId, bytes)
-    else missing.push(model.name)
+  for (const ref of projectBlobRefs(project)) {
+    const bytes = await store.get(ref.blobId)
+    if (bytes) blobs.set(ref.blobId, bytes)
+    else missing.push(ref.name)
   }
   const zip = buildProjectBundle(project, blobs)
   downloadBlob(zip.slice(), `${slugify(project.name)}-with-models.zip`, 'application/zip')

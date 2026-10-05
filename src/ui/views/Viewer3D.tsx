@@ -4,12 +4,13 @@ import { Edges, Html, Line, OrbitControls } from '@react-three/drei'
 import { Canvas, type ThreeEvent, useThree } from '@react-three/fiber'
 import { PencilIcon } from 'lucide-react'
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { CanvasTexture, type InstancedMesh, Object3D, Quaternion, RepeatWrapping, SRGBColorSpace, Vector3 } from 'three'
+import { CanvasTexture, type InstancedMesh, Object3D, RepeatWrapping, SRGBColorSpace, Vector3 } from 'three'
 import { isDrawingDimId } from '@/drawings'
 import { EditableDimension } from '../components/EditableDimension'
 import type { DimensionEdit, DimensionEdits } from '../lib/dimensionEdits'
-import type { DimensionSpec, Finish, MeshSpec, PinHoleSpec, PullSpec, RodSpec, SceneSpec } from '../lib/scene'
+import type { DimensionSpec, Finish, MeshSpec, PinHoleSpec, RodSpec, SceneSpec } from '../lib/scene'
 import { SceneExtras, type SceneExtrasProps } from '../models/SceneExtras'
+import { Pull } from './PullMesh'
 
 /** Camera distance as a multiple of the scene's largest extent. */
 const CAMERA_DISTANCE = 3.1
@@ -154,43 +155,6 @@ function RodMesh({ mesh, rod, isHovered, onHover, onPick }: PartMeshProps & { ro
           </mesh>
         ))}
       </group>
-    </group>
-  )
-}
-
-/** Bar pull: a rod between the two holes, held off the face by two posts. */
-function Pull({ pull }: { pull: PullSpec }) {
-  const { rod, posts } = useMemo(() => {
-    const a = new Vector3(...pull.a)
-    const b = new Vector3(...pull.b)
-    const n = new Vector3(...pull.normal).normalize()
-    const offA = a.clone().addScaledVector(n, pull.standoff)
-    const offB = b.clone().addScaledVector(n, pull.standoff)
-    const along = offB.clone().sub(offA)
-    const length = along.length()
-    const quat = new Quaternion().setFromUnitVectors(UP, along.clone().normalize())
-    const postQuat = new Quaternion().setFromUnitVectors(UP, n)
-    const mid = (p: Vector3, q: Vector3): Vector3 => p.clone().add(q).multiplyScalar(0.5)
-    return {
-      rod: { position: mid(offA, offB), quaternion: quat, length: length + 0.03 },
-      posts: [
-        { position: mid(a, offA), quaternion: postQuat },
-        { position: mid(b, offB), quaternion: postQuat },
-      ],
-    }
-  }, [pull])
-  return (
-    <group>
-      <mesh position={rod.position} quaternion={rod.quaternion} castShadow>
-        <cylinderGeometry args={[0.006, 0.006, rod.length, 16]} />
-        <meshStandardMaterial color="#c9ccd0" metalness={0.35} roughness={0.3} />
-      </mesh>
-      {posts.map((p, i) => (
-        <mesh key={i} position={p.position} quaternion={p.quaternion} castShadow>
-          <cylinderGeometry args={[0.005, 0.005, pull.standoff, 12]} />
-          <meshStandardMaterial color="#b9bdc2" metalness={0.35} roughness={0.35} />
-        </mesh>
-      ))}
     </group>
   )
 }

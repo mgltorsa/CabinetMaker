@@ -67,6 +67,12 @@ export const MAX_EXTRA_CHARGES = 50
 export const SLIDE_LENGTH: Bounds = { min: 100, max: 1500 }
 export const HINGE_OPENING_ANGLE: Bounds = { min: 1, max: 270 }
 export const PULL_CENTERS: Bounds = { min: 16, max: 1500 }
+/** Custom handles may take 0 centres (a single screw). */
+export const CUSTOM_PULL_CENTERS: Bounds = { min: 0, max: PULL_CENTERS.max }
+/** Handle length / width / diameter (mm): a J-profile cut for a 3 m front is the largest. */
+export const HANDLE_DIMENSION: Bounds = { min: 0.5, max: 3000 }
+/** How far a handle stands off the front (mm). */
+export const HANDLE_PROJECTION: Bounds = { min: 0, max: 200 }
 /** Hanging-rod drop below the bay top (rod centre). */
 export const ROD_DROP: Bounds = { min: 1, max: 3000 }
 /**
