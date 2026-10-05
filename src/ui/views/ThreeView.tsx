@@ -80,8 +80,8 @@ export function ThreeView({ project, result }: ThreeViewProps) {
   const selectCabinet = useDesigner((s) => s.selectCabinet)
   const [hoveredPartId, setHoveredPartId] = useState<string | null>(null)
   const scene = useMemo(
-    () => buildScene(result.build, project.cabinets, view, { units: project.units, selectedCabinetId }),
-    [result.build, project.cabinets, view, project.units, selectedCabinetId],
+    () => buildScene(result.build, project.cabinets, view, { units: project.units, selectedCabinetId, materials: project.materials }),
+    [result.build, project.cabinets, view, project.units, selectedCabinetId, project.materials],
   )
   const hovered = hoveredPartId === null ? undefined : result.partsById.get(hoveredPartId)
   const cabinetName = hovered ? project.cabinets.find((c) => c.id === hovered.cabinetId)?.name : undefined

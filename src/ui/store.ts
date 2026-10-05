@@ -14,6 +14,7 @@ import type {
   EstimateSettings,
   Id,
   Machine,
+  Material,
   NestSettings,
   Project,
   SlideMount,
@@ -102,6 +103,14 @@ export interface DesignerActions {
   updateNest: (patch: Partial<NestSettings>) => void
   updateEstimate: (patch: Partial<Omit<EstimateSettings, 'labor'>>) => void
   updateLabor: (patch: Partial<EstimateSettings['labor']>) => void
+
+  /** Material library. Add/duplicate return the new id (null at the catalog limit). */
+  addMaterial: (kind: Material['kind']) => Id | null
+  updateMaterial: (id: Id, patch: ops.MaterialPatch) => void
+  duplicateMaterial: (id: Id) => Id | null
+  /** Blocked while the material is in use, unless `replacementId` takes over every use first. */
+  deleteMaterial: (id: Id, replacementId?: Id) => void
+  replaceMaterialUses: (fromId: Id, toId: Id) => void
 }
 
 export interface DesignerState extends DesignerActions {
@@ -122,7 +131,7 @@ function validSelection(project: Project, preferred: Id | null): Id | null {
 }
 
 export function createDesignerStore(initial: Project = createProject()): DesignerStore {
-  return createStore<DesignerState>()((set) => {
+  return createStore<DesignerState>()((set, get) => {
     /** Apply a pure project edit. */
     const edit = (fn: (p: Project) => Project): void => set((s) => ({ project: fn(s.project) }))
 
@@ -194,6 +203,20 @@ export function createDesignerStore(initial: Project = createProject()): Designe
       updateNest: (patch) => edit((p) => ops.updateNest(p, patch)),
       updateEstimate: (patch) => edit((p) => ops.updateEstimate(p, patch)),
       updateLabor: (patch) => edit((p) => ops.updateLabor(p, patch)),
+
+      addMaterial: (kind) => {
+        const { project, materialId } = ops.addMaterial(get().project, kind)
+        set({ project })
+        return materialId
+      },
+      updateMaterial: (id, patch) => edit((p) => ops.updateMaterial(p, id, patch)),
+      duplicateMaterial: (id) => {
+        const { project, copyId } = ops.duplicateMaterial(get().project, id)
+        set({ project })
+        return copyId
+      },
+      deleteMaterial: (id, replacementId) => edit((p) => ops.deleteMaterial(p, id, replacementId)),
+      replaceMaterialUses: (fromId, toId) => edit((p) => ops.replaceMaterialUses(p, fromId, toId)),
     }
   })
 }

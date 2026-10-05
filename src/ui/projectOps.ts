@@ -13,14 +13,18 @@ import type {
   ConstructionMethod,
   EstimateSettings,
   Id,
+  LinearMaterial,
   Machine,
+  Material,
   NestSettings,
   Project,
   Section,
+  SheetMaterial,
   SlideMount,
   Tool,
 } from '@/core/types'
-import { MAX_BAYS, MAX_CABINETS, MAX_SECTIONS } from './lib/limits'
+import { MAX_BAYS, MAX_CABINETS, MAX_CATALOG_ITEMS, MAX_SECTIONS } from './lib/limits'
+import { type MaterialUseField, nextMaterialColor } from './lib/materials'
 import { slideForMount } from './lib/slides'
 
 export type CabinetPatch = Partial<Pick<Cabinet, 'name' | 'type' | 'width' | 'height' | 'depth' | 'floorHeight'>>
@@ -105,7 +109,7 @@ export function addCabinet(project: Project, cabinet: Cabinet): Project {
   const taken = new Set(project.cabinets.map((c) => c.id))
   const id = taken.has(cabinet.id) ? uniqueId('cab', taken) : cabinet.id
   const name = uniqueName(cabinet.name, project.cabinets.map((c) => c.name))
-  return { ...project, cabinets: [...project.cabinets, { ...cabinet, id, name }] }
+  return { ...project, cabinets: [...project.cabinets, { ...withKnownMaterials(project, cabinet), id, name }] }
 }
 
 /** Deep copy with fresh cabinet/section/bay ids, inserted after the source. */
@@ -222,4 +226,164 @@ export function setDrawerCount(project: Project, cabinetId: Id, sectionId: Id, c
     const bays = s.bays.filter((b) => !remove.has(b.id))
     return { ...s, bays: bays.length > 0 ? bays : [newBay('open', null, 1)] }
   })
+}
+
+// ─── Material library ───────────────────────────────────────────────────────
+
+export type MaterialPatch = Partial<Omit<SheetMaterial, 'id' | 'kind'>> | Partial<Omit<LinearMaterial, 'id' | 'kind'>>
+
+/** Editable keys per kind; anything else in a patch is ignored so a material never gains foreign fields. */
+const MATERIAL_KEYS: { sheet: readonly (keyof SheetMaterial)[]; linear: readonly (keyof LinearMaterial)[] } = {
+  sheet: ['name', 'thickness', 'sheetLength', 'sheetWidth', 'grained', 'costPerSheet', 'color'],
+  linear: ['name', 'thickness', 'width', 'stockLength', 'costPerMetre', 'color'],
+}
+
+type ConstructionMaterialKey = 'carcassMaterialId' | 'backMaterialId' | 'frontMaterialId' | 'drawerBoxMaterialId' | 'drawerBottomMaterialId' | 'faceFrameMaterialId'
+
+/** Construction fields that hold a material id, in the order uses are listed. */
+const CONSTRUCTION_MATERIAL_FIELDS: readonly [Exclude<MaterialUseField, 'top'>, ConstructionMaterialKey][] = [
+  ['carcass', 'carcassMaterialId'],
+  ['back', 'backMaterialId'],
+  ['fronts', 'frontMaterialId'],
+  ['drawerBox', 'drawerBoxMaterialId'],
+  ['drawerBottom', 'drawerBottomMaterialId'],
+  ['faceFrame', 'faceFrameMaterialId'],
+]
+
+/** Kind a construction field expects (face frames are cut from linear stock). */
+const fieldKind = (key: ConstructionMaterialKey): Material['kind'] => (key === 'faceFrameMaterialId' ? 'linear' : 'sheet')
+
+const NEW_MATERIAL_NAME: Record<Material['kind'], string> = { sheet: 'New sheet material', linear: 'New linear stock' }
+/** Starting stock for a new material: a 4×8 (2440 × 1220) 18 mm sheet and 19 × 63 mm boards, like the default catalog. */
+const NEW_SHEET = { thickness: 18, sheetLength: 2440, sheetWidth: 1220, grained: true, costPerSheet: 0 } as const
+const NEW_LINEAR = { thickness: 19, width: 63, stockLength: 2440, costPerMetre: 0 } as const
+/** Longest slug part of a material id, so ids stay readable in sheet labels and G-code comments. */
+const MAX_SLUG_LENGTH = 24
+
+/** Lowercase ascii words joined by dashes, e.g. "Walnut ply 19" → "walnut-ply-19". */
+export function materialSlug(name: string): string {
+  const slug = name
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+/, '')
+    .slice(0, MAX_SLUG_LENGTH)
+    .replace(/-+$/, '')
+  return slug === '' ? 'material' : slug
+}
+
+/** Slug of `name` plus a short random suffix, never one of `taken`. */
+export function newMaterialId(name: string, taken: ReadonlySet<Id>): Id {
+  return uniqueId(materialSlug(name), taken)
+}
+
+function canAddMaterial(project: Project): boolean {
+  return project.materials.length < MAX_CATALOG_ITEMS
+}
+
+/** A new material of `kind` with defaults that fit the machine table and a fresh palette colour. */
+function newMaterial(project: Project, kind: Material['kind']): Material {
+  const name = uniqueName(NEW_MATERIAL_NAME[kind], project.materials.map((m) => m.name))
+  const id = newMaterialId(name, new Set(project.materials.map((m) => m.id)))
+  const color = nextMaterialColor(project.materials)
+  if (kind === 'linear') return { kind, id, name, ...NEW_LINEAR, color }
+  const { tableX, tableY } = project.machine
+  // Shrink to the machine table so a new sheet never starts with a CAM warning.
+  return { kind, id, name, ...NEW_SHEET, sheetLength: Math.min(NEW_SHEET.sheetLength, tableX), sheetWidth: Math.min(NEW_SHEET.sheetWidth, tableY), color }
+}
+
+export function addMaterial(project: Project, kind: Material['kind']): { project: Project; materialId: Id | null } {
+  if (!canAddMaterial(project)) return { project, materialId: null }
+  const material = newMaterial(project, kind)
+  return { project: { ...project, materials: [...project.materials, material] }, materialId: material.id }
+}
+
+/** Patch a material's own fields; `color: undefined` removes the colour (back to the finish colour). */
+export function updateMaterial(project: Project, materialId: Id, patch: MaterialPatch): Project {
+  const source = project.materials.find((m) => m.id === materialId)
+  if (!source) return project
+  const allowed: readonly string[] = MATERIAL_KEYS[source.kind]
+  const picked = Object.fromEntries(Object.entries(patch).filter(([key]) => allowed.includes(key)))
+  // Safe: `picked` holds only keys of `source.kind`, typed by MaterialPatch.
+  const { color, ...rest } = { ...source, ...picked } as Material
+  const next = (color === undefined ? rest : { ...rest, color }) as Material
+  return { ...project, materials: project.materials.map((m) => (m.id === materialId ? next : m)) }
+}
+
+/** Copy with a fresh id, name and colour, inserted after the source. */
+export function duplicateMaterial(project: Project, materialId: Id): { project: Project; copyId: Id | null } {
+  const index = project.materials.findIndex((m) => m.id === materialId)
+  const source = project.materials[index]
+  if (!source || !canAddMaterial(project)) return { project, copyId: null }
+  const name = uniqueName(`${source.name} copy`, project.materials.map((m) => m.name))
+  const copy: Material = { ...source, id: newMaterialId(name, new Set(project.materials.map((m) => m.id))), name, color: nextMaterialColor(project.materials) }
+  const materials = [...project.materials.slice(0, index + 1), copy, ...project.materials.slice(index + 1)]
+  return { project: { ...project, materials }, copyId: copy.id }
+}
+
+export interface MaterialUse {
+  cabinetId: Id
+  cabinetName: string
+  fields: MaterialUseField[]
+}
+
+/** Every cabinet that references `materialId`, with the fields that do. */
+export function materialUses(project: Project, materialId: Id): MaterialUse[] {
+  return project.cabinets.flatMap((cab) => {
+    const fields: MaterialUseField[] = CONSTRUCTION_MATERIAL_FIELDS.filter(([, key]) => cab.construction[key] === materialId).map(([field]) => field)
+    if (cab.top.materialId === materialId) fields.push('top')
+    return fields.length > 0 ? [{ cabinetId: cab.id, cabinetName: cab.name, fields }] : []
+  })
+}
+
+/** Point every use of `fromId` at `toId`. No-op unless both exist, differ and are the same kind. */
+export function replaceMaterialUses(project: Project, fromId: Id, toId: Id): Project {
+  const from = project.materials.find((m) => m.id === fromId)
+  const to = project.materials.find((m) => m.id === toId)
+  if (!from || !to || from.id === to.id || from.kind !== to.kind) return project
+  if (materialUses(project, fromId).length === 0) return project
+  const swap = (id: Id): Id => (id === fromId ? toId : id)
+  const cabinets = project.cabinets.map((cab) => {
+    const construction = { ...cab.construction }
+    for (const [, key] of CONSTRUCTION_MATERIAL_FIELDS) construction[key] = swap(construction[key])
+    const top = cab.top.materialId === null ? cab.top : { ...cab.top, materialId: swap(cab.top.materialId) }
+    return { ...cab, construction, top }
+  })
+  return { ...project, cabinets }
+}
+
+/** Why a material cannot be deleted. */
+export type MaterialDeleteBlock = 'missing' | 'last-of-kind' | 'in-use'
+
+/** The reason `materialId` cannot be deleted, or null when it can. */
+export function materialDeleteBlock(project: Project, materialId: Id): MaterialDeleteBlock | null {
+  const material = project.materials.find((m) => m.id === materialId)
+  if (!material) return 'missing'
+  // New cabinets fall back to the first material of a kind, so one must remain.
+  if (!project.materials.some((m) => m.id !== materialId && m.kind === material.kind)) return 'last-of-kind'
+  return materialUses(project, materialId).length > 0 ? 'in-use' : null
+}
+
+/**
+ * Delete a material. With `replacementId`, every use first moves to that
+ * material (same kind). Blocked (same project returned) while anything still
+ * uses it, so no cabinet is ever left with a dangling material id.
+ */
+export function deleteMaterial(project: Project, materialId: Id, replacementId?: Id): Project {
+  const replaced = replacementId === undefined ? project : replaceMaterialUses(project, materialId, replacementId)
+  if (materialDeleteBlock(replaced, materialId) !== null) return project
+  return { ...replaced, materials: replaced.materials.filter((m) => m.id !== materialId) }
+}
+
+/** The cabinet with unknown material ids moved to the project's first material of the expected kind. */
+function withKnownMaterials(project: Project, cabinet: Cabinet): Cabinet {
+  const known = new Set(project.materials.map((m) => m.id))
+  const firstOf = (kind: Material['kind']): Id | undefined => project.materials.find((m) => m.kind === kind)?.id
+  const resolve = (id: Id, kind: Material['kind']): Id => (known.has(id) ? id : (firstOf(kind) ?? firstOf('sheet') ?? id))
+  const construction = { ...cabinet.construction }
+  for (const [, key] of CONSTRUCTION_MATERIAL_FIELDS) construction[key] = resolve(construction[key], fieldKind(key))
+  const topId = cabinet.top.materialId
+  const top = topId === null || known.has(topId) ? cabinet.top : { ...cabinet.top, materialId: null }
+  return { ...cabinet, construction, top }
 }

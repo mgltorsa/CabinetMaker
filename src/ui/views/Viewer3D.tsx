@@ -96,7 +96,7 @@ function PartMesh({ mesh, isHovered, onHover, onPick }: PartMeshProps) {
       onClick={handleClick}
     >
       <boxGeometry args={mesh.size} />
-      <meshStandardMaterial color={finish.color} roughness={finish.roughness} metalness={0} emissive={HOVER_EMISSIVE} emissiveIntensity={isHovered ? 0.28 : 0} />
+      <meshStandardMaterial color={mesh.color ?? finish.color} roughness={finish.roughness} metalness={0} emissive={HOVER_EMISSIVE} emissiveIntensity={isHovered ? 0.28 : 0} />
       <Edges color="#000000" opacity={0.16} transparent threshold={20} />
     </mesh>
   )
