@@ -47,6 +47,16 @@ export function Workspace({ project, result }: WorkspaceProps) {
     )
   }
 
+  if (section === 'models') {
+    return (
+      <div className="h-full">
+        <ErrorBoundary title="The 3D view failed." resetKey={result}>
+          <ThreeView project={project} result={result} />
+        </ErrorBoundary>
+      </div>
+    )
+  }
+
   if (section === 'outputs') {
     return (
       <Tabs value={outputView} onValueChange={(v) => setOutputView(v as OutputView)} className="h-full gap-0">

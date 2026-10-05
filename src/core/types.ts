@@ -247,7 +247,16 @@ export interface Cabinet {
     overhangSides: Mm
   }
   /** Placement in the room (phase 6). Cabinet space origin in room space. */
-  placement?: { wallId: Id | null; offset: Mm; rotationDeg: number }
+  placement?: {
+    wallId: Id | null
+    offset: Mm
+    rotationDeg: number
+    /**
+     * Free placement: the cabinet's back-left floor corner in room space (mm).
+     * Absent → the cabinet stays in the automatic run along the back wall.
+     */
+    position?: { x: Mm; z: Mm }
+  }
 }
 
 // ─── Machine & tools ────────────────────────────────────────────────────────
@@ -383,6 +392,38 @@ export interface Room {
   openings: WallOpening[]
 }
 
+// ─── Imported 3D models (phase 6) ───────────────────────────────────────────
+//
+// Room space: mm, Y up. Origin at the left end of the automatic cabinet run on
+// the back-wall plane; +X along the back wall, +Z away from it into the room.
+// Wall `Vec2` points are room-space (x, z) with `y` holding z.
+
+export type ModelFormat = 'glb' | 'gltf' | 'obj' | 'stl'
+/** Units a model file's coordinates are in (glTF is metres by spec; OBJ/STL are unitless). */
+export type ModelUnit = 'm' | 'cm' | 'mm' | 'in'
+
+/**
+ * An imported model placed in the room. The project stores only this reference
+ * and transform; the file bytes live in the browser's model store (IndexedDB)
+ * under `blobId`, or travel in a project .zip bundle.
+ */
+export interface SceneModel {
+  id: Id
+  name: string
+  format: ModelFormat
+  /** Key of the file bytes in the model store (content hash). */
+  blobId: Id
+  unit: ModelUnit
+  /** Bounding-box size in the file's own units (placeholder box when the file is missing). */
+  nativeSize: Vec3
+  /** Room-space floor point under the model's bounding-box centre, mm (y = lift above the floor). */
+  position: Vec3
+  rotationYDeg: number
+  /** Uniform scale on top of the unit conversion (1 = true size). */
+  scale: number
+  visible: boolean
+}
+
 // ─── Project (the only persisted document) ──────────────────────────────────
 
 export const PROJECT_SCHEMA_VERSION = 1
@@ -402,6 +443,8 @@ export interface Project {
   room: Room | null
   /** Plan-book PDF title block, branding and sections; defaults when absent. */
   pdf?: PdfSettings
+  /** Imported models (phase 6). Absent in projects saved before models existed. */
+  models?: SceneModel[]
 }
 
 // ─── Engine output ──────────────────────────────────────────────────────────

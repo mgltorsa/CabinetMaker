@@ -9,6 +9,7 @@ import { isDrawingDimId } from '@/drawings'
 import { EditableDimension } from '../components/EditableDimension'
 import type { DimensionEdit, DimensionEdits } from '../lib/dimensionEdits'
 import type { DimensionSpec, Finish, MeshSpec, PinHoleSpec, PullSpec, RodSpec, SceneSpec } from '../lib/scene'
+import { SceneExtras, type SceneExtrasProps } from '../models/SceneExtras'
 
 /** Camera distance as a multiple of the scene's largest extent. */
 const CAMERA_DISTANCE = 3.1
@@ -296,10 +297,12 @@ export type Viewer3DProps = {
   onPick: (cabinetId: string) => void
   /** Dimension labels (by `DimensionSpec.id`) that can be edited in place. */
   dimensionEdits?: DimensionEdits
+  /** Room shell and imported models (sidebar 05). */
+  extras?: SceneExtrasProps
 }
 
 /** WebGL view; loaded client-side only (see ThreeView). */
-export default function Viewer3D({ scene, focusKey, hoveredPartId, onHover, onPick, dimensionEdits }: Viewer3DProps) {
+export default function Viewer3D({ scene, focusKey, hoveredPartId, onHover, onPick, dimensionEdits, extras }: Viewer3DProps) {
   const floorSize = Math.max(8, Math.ceil(scene.extent * 6))
   const floorTexture = useFloorTexture(floorSize / 1.6)
   const [tx, ty, tz] = scene.focus.target
@@ -338,10 +341,14 @@ export default function Viewer3D({ scene, focusKey, hoveredPartId, onHover, onPi
           <planeGeometry args={[floorSize, floorSize]} />
           <meshStandardMaterial map={floorTexture} color={floorTexture ? '#ffffff' : '#c9ab7c'} roughness={0.8} />
         </mesh>
-        <mesh position={[0, 1.6, -0.002]} receiveShadow>
-          <planeGeometry args={[floorSize, 3.2]} />
-          <meshStandardMaterial color="#ebe6de" roughness={0.95} />
-        </mesh>
+        {/* A built room replaces the default back wall. */}
+        {!extras?.room && (
+          <mesh position={[0, 1.6, -0.002]} receiveShadow>
+            <planeGeometry args={[floorSize, 3.2]} />
+            <meshStandardMaterial color="#ebe6de" roughness={0.95} />
+          </mesh>
+        )}
+        {extras && <SceneExtras {...extras} />}
 
         {scene.meshes.map((m) =>
           m.rod ? (

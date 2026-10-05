@@ -8,6 +8,8 @@ import { ErrorBoundary } from '../components/ErrorBoundary'
 import { cn } from '../lib/cn'
 import { dimsLabel } from '../lib/format'
 import { buildScene } from '../lib/scene'
+import { ModelDropZone } from '../models/ModelDropZone'
+import { roomCentreX } from '../models/room'
 import { type ViewToggle, useDesigner } from '../store'
 import { useDimensionEdits } from '../useDimensionEdits'
 
@@ -27,6 +29,8 @@ export const VISIBILITY_TOGGLES: { key: ViewToggle; label: string }[] = [
   { key: 'drawers', label: 'Drawers' },
   { key: 'drawersOpen', label: 'Drawers open' },
   { key: 'back', label: 'Cabinet back' },
+  { key: 'room', label: 'Room' },
+  { key: 'models', label: 'Models' },
 ]
 
 function VisibilityPills() {
@@ -80,22 +84,28 @@ export function ThreeView({ project, result }: ThreeViewProps) {
   const selectedCabinetId = useDesigner((s) => s.selectedCabinetId)
   const selectCabinet = useDesigner((s) => s.selectCabinet)
   const [hoveredPartId, setHoveredPartId] = useState<string | null>(null)
+  // A shown room fixes the centre, so the room and models stay put while cabinets change.
+  const room = view.room && project.room && project.room.walls.length > 0 ? project.room : null
+  const centreX = room ? roomCentreX(room) : undefined
   const scene = useMemo(
-    () => buildScene(result.build, project.cabinets, view, { units: project.units, selectedCabinetId, materials: project.materials }),
-    [result.build, project.cabinets, view, project.units, selectedCabinetId, project.materials],
+    () => buildScene(result.build, project.cabinets, view, { units: project.units, selectedCabinetId, materials: project.materials, centreX }),
+    [result.build, project.cabinets, view, project.units, selectedCabinetId, project.materials, centreX],
   )
   const selected = project.cabinets.find((c) => c.id === selectedCabinetId) ?? null
   const dimensionEdits = useDimensionEdits(selected, result.build.cabinets.find((b) => b.cabinetId === selectedCabinetId))
+  const models = useMemo(() => (view.models ? (project.models ?? []).filter((m) => m.visible) : []), [view.models, project.models])
+  const extras = useMemo(() => ({ room, models, centreX: scene.centreX }), [room, models, scene.centreX])
+  const isEmpty = scene.meshes.length === 0 && room === null && models.length === 0
   const hovered = hoveredPartId === null ? undefined : result.partsById.get(hoveredPartId)
   const cabinetName = hovered ? project.cabinets.find((c) => c.id === hovered.cabinetId)?.name : undefined
 
   return (
-    <div className="relative h-full min-h-[420px] w-full">
+    <ModelDropZone className="h-full min-h-[420px] w-full">
       <p className="sr-only">
         3D model with {scene.meshes.length} visible parts. Drag to orbit, scroll to zoom; the Front, Side and Joinery views and the cut list give the same
         information as drawings and text.
       </p>
-      {scene.meshes.length === 0 ? (
+      {isEmpty ? (
         <p className="grid h-full place-items-center text-sm text-muted-foreground">Nothing to show. Add a cabinet or turn parts back on.</p>
       ) : (
         <ErrorBoundary title="The 3D view could not start (WebGL may be unavailable).">
@@ -106,6 +116,7 @@ export function ThreeView({ project, result }: ThreeViewProps) {
             onHover={setHoveredPartId}
             onPick={selectCabinet}
             dimensionEdits={dimensionEdits}
+            extras={extras}
           />
         </ErrorBoundary>
       )}
@@ -124,6 +135,6 @@ export function ThreeView({ project, result }: ThreeViewProps) {
           </>
         )}
       </div>
-    </div>
+    </ModelDropZone>
   )
 }

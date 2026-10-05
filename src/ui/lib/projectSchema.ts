@@ -13,6 +13,7 @@ import {
   type NestSettings,
   type Project,
   type Room,
+  type SceneModel,
   type Section,
   type SheetMaterial,
   type Tool,
@@ -33,7 +34,12 @@ import {
   MAX_SHELVES,
   MAX_TAB_WIDTH,
   MATERIAL_THICKNESS,
+  MAX_MODELS,
   MIN_SHELF_PIN_SPACING,
+  MODEL_LIFT,
+  MODEL_NATIVE_SIZE,
+  MODEL_SCALE,
+  ROOM_COORD,
   MIN_STEP_DOWN,
   MIN_TAB_SPACING,
   ROD_DROP,
@@ -62,6 +68,7 @@ import {
   uniqueList,
 } from './schema'
 import { pdfSettings } from './pdfSchema'
+import { isBlobId } from '../models/blobStore'
 
 const catalog = { max: MAX_CATALOG_ITEMS }
 
@@ -151,7 +158,14 @@ const cabinet = refine(
       overhangFront: length,
       overhangSides: length,
     }),
-    placement: optional(obj({ wallId: nullable(str), offset: num, rotationDeg: num })),
+    placement: optional(
+      obj({
+        wallId: nullable(str),
+        offset: num,
+        rotationDeg: num,
+        position: optional(obj({ x: numIn(ROOM_COORD), z: numIn(ROOM_COORD) })),
+      }),
+    ),
   }),
   (c, p) => uniqueBayIds(c.sections, p),
 )
@@ -296,6 +310,23 @@ const room = obj<Room>({
   ),
 })
 
+const roomCoord = numIn(ROOM_COORD)
+const nativeSize = numIn(MODEL_NATIVE_SIZE)
+
+const sceneModel = obj<SceneModel>({
+  id: str,
+  name: str,
+  format: oneOf('glb', 'gltf', 'obj', 'stl'),
+  // Blob ids name zip entries on export: no path separators.
+  blobId: refine(str, (v, p) => (isBlobId(v) ? null : `${p} must be a lowercase content id (a-z, 0-9, -)`)),
+  unit: oneOf('m', 'cm', 'mm', 'in'),
+  nativeSize: obj({ x: nativeSize, y: nativeSize, z: nativeSize }),
+  position: obj({ x: roomCoord, y: numIn(MODEL_LIFT), z: roomCoord }),
+  rotationYDeg: num,
+  scale: numIn(MODEL_SCALE),
+  visible: bool,
+})
+
 const projectShape = obj<Project>({
   schemaVersion: oneOf(PROJECT_SCHEMA_VERSION),
   id: str,
@@ -310,6 +341,7 @@ const projectShape = obj<Project>({
   estimate,
   room: nullable(room),
   pdf: optional(pdfSettings),
+  models: optional(uniqueList(sceneModel, { max: MAX_MODELS })),
 })
 
 /** Material references every cabinet needs before the engine can build it. */

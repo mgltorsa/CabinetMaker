@@ -5,6 +5,7 @@ import {
   BoxIcon,
   ChevronDownIcon,
   CopyIcon,
+  FileArchiveIcon,
   FileDownIcon,
   FilePlusIcon,
   FileTextIcon,
@@ -15,8 +16,8 @@ import {
 import { type ChangeEvent, useRef } from 'react'
 import type { BuildWarning, Project, UnitSystem, WarningLevel } from '@/core/types'
 import { cn } from '../lib/cn'
+import { downloadProjectBundle, readProjectFile } from '../models/bundleIo'
 import { MAX_CABINETS } from '../lib/limits'
-import { parseProjectJson } from '../persistence'
 import { selectedCabinet, useDesigner } from '../store'
 import { errorMessage, notify } from '../toast'
 import type { Exports } from '../useExports'
@@ -164,7 +165,7 @@ export function TopBar({ project, warnings, pipelineError, exports }: TopBarProp
     input.value = '' // allow re-importing the same file
     if (!file) return
     try {
-      const parsed = parseProjectJson(await file.text())
+      const parsed = await readProjectFile(file)
       if (!parsed.ok) {
         notify('error', `Import failed: ${parsed.error}`)
         return
@@ -192,10 +193,13 @@ export function TopBar({ project, warnings, pipelineError, exports }: TopBarProp
             <FilePlusIcon /> New project
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
-            <FolderOpenIcon /> Import JSON…
+            <FolderOpenIcon /> Import JSON or .zip…
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={exports.downloadProjectJson}>
             <FileDownIcon /> Export JSON
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void downloadProjectBundle(project).catch((error: unknown) => notify('error', `Export failed: ${errorMessage(error)}`))}>
+            <FileArchiveIcon /> Export project with models (.zip)
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem disabled={exports.isPdfBusy} onSelect={() => void exports.downloadPdf()}>
@@ -215,7 +219,7 @@ export function TopBar({ project, warnings, pipelineError, exports }: TopBarProp
       <input
         ref={fileInput}
         type="file"
-        accept="application/json,.json"
+        accept="application/json,.json,application/zip,.zip"
         className="sr-only"
         tabIndex={-1}
         aria-hidden="true"
