@@ -2,12 +2,13 @@
  * Front elevation: looking at the cabinet front. Cabinet X → drawing X,
  * cabinet Y → drawing Y. Fronts are filled so they hide the carcass behind.
  */
-import type { Cabinet, CabinetBuild, Drawing, Mm, Part, PartGroup, Shape, UnitSystem } from '@/core/types'
+import type { Cabinet, CabinetBuild, Drawing, DrawingDimId, Mm, Part, PartGroup, Shape, UnitSystem } from '@/core/types'
 import { formatLength } from '@/core/units'
 import { makeDrawing } from './bounds'
 import { hingeSide, isDoor, project, pullPoints, union } from './part-geometry'
 import { floorLine, horizontalDims, mountingNote, verticalDims } from './envelope-dims'
-import { circle, dim, line, rect, type Range2 } from './shapes'
+import { frontDimId, frontRefOf } from './dim-ids'
+import { circle, dim, line, rect, withId, type Range2 } from './shapes'
 import { FILL_FRONT, type DrawingStyle } from './style'
 
 const VISIBLE_GROUPS: readonly PartGroup[] = ['carcass', 'divider', 'face-frame', 'toe-kick', 'top', 'stretcher']
@@ -130,13 +131,27 @@ export function frontColumns(fronts: readonly Part[]): Part[][] {
   return columns.map((c) => c.parts)
 }
 
-/** Distinct front height intervals (plus toe kick) bottom to top. */
-function heightChain(fronts: readonly Part[], kickHeight: Mm): Array<[Mm, Mm]> {
-  const spans: Array<[Mm, Mm]> = fronts.map((f) => [f.bounds.min.y, f.bounds.max.y])
-  if (kickHeight > EPS) spans.push([0, kickHeight])
-  const key = (s: [Mm, Mm]): string => `${s[0].toFixed(2)}:${s[1].toFixed(2)}`
-  const unique = new Map(spans.filter((s) => s[1] - s[0] > EPS).map((s) => [key(s), s] as const))
-  return [...unique.values()].sort((a, b) => a[0] - b[0] || a[1] - b[1])
+/** One link of a height chain: a front (or the toe kick) from `y0` to `y1`. */
+interface ChainSpan {
+  y0: Mm
+  y1: Mm
+  id?: DrawingDimId
+}
+
+function frontSpan(f: Part): ChainSpan {
+  const ref = frontRefOf(f)
+  const span = { y0: f.bounds.min.y, y1: f.bounds.max.y }
+  return ref ? { ...span, id: frontDimId(ref.section, ref.bay) } : span
+}
+
+/** Distinct front height intervals (plus toe kick) bottom to top; the first front of an interval names it. */
+function heightChain(fronts: readonly Part[], kickHeight: Mm): ChainSpan[] {
+  const spans: ChainSpan[] = fronts.map(frontSpan)
+  if (kickHeight > EPS) spans.push({ y0: 0, y1: kickHeight, id: 'toe-kick' })
+  const key = (s: ChainSpan): string => `${s.y0.toFixed(2)}:${s.y1.toFixed(2)}`
+  const unique = new Map<string, ChainSpan>()
+  for (const s of spans) if (s.y1 - s.y0 > EPS && !unique.has(key(s))) unique.set(key(s), s)
+  return [...unique.values()].sort((a, b) => a.y0 - b.y0 || a.y1 - b.y1)
 }
 
 function toeKickHeight(cabinet: Cabinet, parts: readonly Part[]): Mm {
@@ -172,7 +187,7 @@ function frontShapes(cabinet: Cabinet, parts: readonly Part[], units: UnitSystem
   const kick = toeKickHeight(cabinet, parts)
   // Primary dims state the cabinet box as entered; projections get an "overall" dim.
   const cab = { x0: 0, x1: cabinet.width, y0: cabinet.floorHeight, y1: cabinet.floorHeight + cabinet.height }
-  shapes.push(...horizontalDims({ lo: cab.x0, hi: cab.x1 }, { lo: box.x0, hi: box.x1 }, cab.y0, gap, fmt))
+  shapes.push(...horizontalDims({ lo: cab.x0, hi: cab.x1 }, { lo: box.x0, hi: box.x1 }, cab.y0, gap, fmt, 'width'))
   shapes.push(...verticalDims({ lo: cab.y0, hi: cab.y1 }, box.y1, Math.min(box.x0, cab.x0), gap, fmt))
   shapes.push(...mountingNote(cabinet.floorHeight, Math.min(box.x0, cab.x0), cab.y0 - gap * 4, style.textSize, fmt))
   // One chain per outer column: rightmost on the right, leftmost (if its fronts differ) outside the left dims.
@@ -180,13 +195,15 @@ function frontShapes(cabinet: Cabinet, parts: readonly Part[], units: UnitSystem
   const right = columns.at(-1) ?? []
   const left = columns.length > 1 ? (columns[0] ?? []) : []
   const rightChain = heightChain(right, kick)
-  rightChain.forEach(([y0, y1]) => shapes.push(dim(box.x1, y0, box.x1, y1, -gap, fmt(y1 - y0))))
+  rightChain.forEach(({ y0, y1, id }) => shapes.push(withId(dim(box.x1, y0, box.x1, y1, -gap, fmt(y1 - y0)), id)))
   const leftChain = heightChain(left, kick)
-  const sameAsRight = leftChain.length === rightChain.length && leftChain.every((s, i) => Math.abs(s[0] - rightChain[i]![0]) < EPS && Math.abs(s[1] - rightChain[i]![1]) < EPS)
+  const sameAsRight = leftChain.length === rightChain.length && leftChain.every((s, i) => Math.abs(s.y0 - rightChain[i]!.y0) < EPS && Math.abs(s.y1 - rightChain[i]!.y1) < EPS)
   if (leftChain.length > 0 && !sameAsRight) {
     const x = Math.min(box.x0, cab.x0)
     const outer = box.y1 > cab.y1 + EPS ? 4.1 : 2.8
-    leftChain.forEach(([y0, y1]) => shapes.push(dim(x, y0, x, y1, gap * outer, fmt(y1 - y0))))
+    // Ids stay unique per drawing: the toe kick (and a pair's bay) is already tagged on the right chain.
+    const tagged = new Set(rightChain.map((s) => s.id))
+    leftChain.forEach(({ y0, y1, id }) => shapes.push(withId(dim(x, y0, x, y1, gap * outer, fmt(y1 - y0)), tagged.has(id) ? undefined : id)))
   }
   return shapes
 }

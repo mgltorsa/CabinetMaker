@@ -17,6 +17,7 @@ import type {
   Id,
   Machine,
   Material,
+  Mm,
   NestSettings,
   Project,
   SlideMount,
@@ -101,6 +102,8 @@ export interface DesignerActions {
   removeBay: (cabinetId: Id, sectionId: Id, bayId: Id) => void
   moveBay: (cabinetId: Id, sectionId: Id, bayId: Id, delta: number) => void
   updateBay: (cabinetId: Id, sectionId: Id, bayId: Id, patch: ops.BayPatch) => void
+  /** Set all bay heights of a section in one edit (e.g. a front height typed in a drawing). */
+  updateBayHeights: (cabinetId: Id, sectionId: Id, heights: readonly (Mm | null)[]) => void
   setDrawerCount: (cabinetId: Id, sectionId: Id, count: number) => void
   /** Add (or with `null` remove) a bay's hanging rod; adds missing rod stock/supports to the catalog. */
   setBayRod: (cabinetId: Id, sectionId: Id, bayId: Id, rod: HangingRod | null) => void
@@ -220,6 +223,7 @@ export function createDesignerStore(initial: Project = createProject()): Designe
       removeBay: (cabinetId, sectionId, bayId) => edit((p) => ops.removeBay(p, cabinetId, sectionId, bayId)),
       moveBay: (cabinetId, sectionId, bayId, delta) => edit((p) => ops.moveBay(p, cabinetId, sectionId, bayId, delta)),
       updateBay: (cabinetId, sectionId, bayId, patch) => edit((p) => ops.updateBay(p, cabinetId, sectionId, bayId, patch)),
+      updateBayHeights: (cabinetId, sectionId, heights) => edit((p) => ops.updateBayHeights(p, cabinetId, sectionId, heights)),
       setDrawerCount: (cabinetId, sectionId, count) => edit((p) => ops.setDrawerCount(p, cabinetId, sectionId, count)),
       setBayRod: (cabinetId, sectionId, bayId, rod) => edit((p) => ops.ensureRodCatalog(ops.setBayRod(p, cabinetId, sectionId, bayId, rod))),
 

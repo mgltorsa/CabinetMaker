@@ -9,6 +9,7 @@ import { cn } from '../lib/cn'
 import { dimsLabel } from '../lib/format'
 import { buildScene } from '../lib/scene'
 import { type ViewToggle, useDesigner } from '../store'
+import { useDimensionEdits } from '../useDimensionEdits'
 
 // three.js touches `window`/WebGL at import time, so keep it out of the static HTML.
 const Viewer3D = dynamic(() => import('./Viewer3D'), {
@@ -83,6 +84,8 @@ export function ThreeView({ project, result }: ThreeViewProps) {
     () => buildScene(result.build, project.cabinets, view, { units: project.units, selectedCabinetId, materials: project.materials }),
     [result.build, project.cabinets, view, project.units, selectedCabinetId, project.materials],
   )
+  const selected = project.cabinets.find((c) => c.id === selectedCabinetId) ?? null
+  const dimensionEdits = useDimensionEdits(selected, result.build.cabinets.find((b) => b.cabinetId === selectedCabinetId))
   const hovered = hoveredPartId === null ? undefined : result.partsById.get(hoveredPartId)
   const cabinetName = hovered ? project.cabinets.find((c) => c.id === hovered.cabinetId)?.name : undefined
 
@@ -96,7 +99,14 @@ export function ThreeView({ project, result }: ThreeViewProps) {
         <p className="grid h-full place-items-center text-sm text-muted-foreground">Nothing to show. Add a cabinet or turn parts back on.</p>
       ) : (
         <ErrorBoundary title="The 3D view could not start (WebGL may be unavailable).">
-          <Viewer3D scene={scene} focusKey={selectedCabinetId ?? ''} hoveredPartId={hoveredPartId} onHover={setHoveredPartId} onPick={selectCabinet} />
+          <Viewer3D
+            scene={scene}
+            focusKey={selectedCabinetId ?? ''}
+            hoveredPartId={hoveredPartId}
+            onHover={setHoveredPartId}
+            onPick={selectCabinet}
+            dimensionEdits={dimensionEdits}
+          />
         </ErrorBoundary>
       )}
       <div className="pointer-events-none absolute top-14 left-3">

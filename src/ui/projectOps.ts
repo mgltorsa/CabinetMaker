@@ -17,6 +17,7 @@ import type {
   LinearMaterial,
   Machine,
   Material,
+  Mm,
   NestSettings,
   Project,
   Section,
@@ -181,6 +182,13 @@ export function updateBay(project: Project, cabinetId: Id, sectionId: Id, bayId:
     ...s,
     bays: s.bays.map((b) => (b.id === bayId ? { ...b, ...patch } : b)),
   }))
+}
+
+/** Set every bay height of a section at once (one per bay, in order); a count mismatch is a no-op. */
+export function updateBayHeights(project: Project, cabinetId: Id, sectionId: Id, heights: readonly (Mm | null)[]): Project {
+  const section = project.cabinets.find((c) => c.id === cabinetId)?.sections.find((s) => s.id === sectionId)
+  if (!section || section.bays.length !== heights.length) return project
+  return mapSection(project, cabinetId, sectionId, (s) => ({ ...s, bays: s.bays.map((b, i) => ({ ...b, height: heights[i] ?? null })) }))
 }
 
 // ─── Project-level settings ─────────────────────────────────────────────────

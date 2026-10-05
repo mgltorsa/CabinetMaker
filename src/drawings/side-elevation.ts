@@ -45,7 +45,7 @@ function sideShapes(cabinet: Cabinet, parts: readonly Part[], cutX: Mm, units: U
   // Primary dims state the cabinet box as entered (depth includes the back);
   // fronts, face frames and countertops that project get an "overall" dim.
   const cab = { z0: 0, z1: cabinet.depth, y0: cabinet.floorHeight, y1: cabinet.floorHeight + cabinet.height }
-  shapes.push(...horizontalDims({ lo: cab.z0, hi: cab.z1 }, { lo: box.x0, hi: box.x1 }, cab.y0, gap, fmt))
+  shapes.push(...horizontalDims({ lo: cab.z0, hi: cab.z1 }, { lo: box.x0, hi: box.x1 }, cab.y0, gap, fmt, 'depth'))
   shapes.push(...verticalDims({ lo: cab.y0, hi: cab.y1 }, box.y1, Math.min(box.x0, cab.z0), gap, fmt))
   shapes.push(...mountingNote(cabinet.floorHeight, Math.min(box.x0, cab.z0), cab.y0 - gap * 4, style.textSize, fmt))
   return shapes
