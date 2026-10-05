@@ -21,6 +21,8 @@ src/cam/        Sheet → toolpaths → G-code (+ parser for round-trip tests). 
 src/estimate/   BOM + cost estimate. Pure TS.
 src/drawings/   Drawing model → SVG string and PDF (pdf-lib). Pure TS.
 src/pipeline/   runPipeline(project): the single derivation every view reads.
+src/export/     Blender / Home Builder 5 bundle (GLB + manifest + import script). Pure TS.
+src/assets/     Built-in scene asset catalog (parametric primitives, lights). Pure TS.
 src/ui/         React components, 3D viewer (react-three-fiber), store (zustand).
 src/app/        Next.js App Router shell (static export).
 ```
@@ -28,7 +30,7 @@ src/app/        Next.js App Router shell (static export).
 Rules:
 
 - Only `Project` is persisted. Never store derived data.
-- Domain modules (`core`, `engine`, `nest`, `cam`, `estimate`, `drawings`, `pipeline`) never import React, `src/ui` or `src/app`.
+- Domain modules (`core`, `engine`, `nest`, `cam`, `estimate`, `drawings`, `pipeline`, `export`, `assets`) never import React, `src/ui` or `src/app`.
 - Each module's public API is its `index.ts`. Do not change exported signatures or `src/core/types.ts` without updating every caller; prefer adding optional fields.
 - Units are mm. Coordinate frames are documented at the top of `src/core/types.ts`.
 - Part ids are deterministic (`${cabinetId}:${role}`); tests rely on it.
