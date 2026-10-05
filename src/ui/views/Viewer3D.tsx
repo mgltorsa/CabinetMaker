@@ -2,8 +2,12 @@
 
 import { Edges, Html, Line, OrbitControls } from '@react-three/drei'
 import { Canvas, type ThreeEvent, useThree } from '@react-three/fiber'
+import { PencilIcon } from 'lucide-react'
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { CanvasTexture, type InstancedMesh, Object3D, Quaternion, RepeatWrapping, SRGBColorSpace, Vector3 } from 'three'
+import { isDrawingDimId } from '@/drawings'
+import { EditableDimension } from '../components/EditableDimension'
+import type { DimensionEdit, DimensionEdits } from '../lib/dimensionEdits'
 import type { DimensionSpec, Finish, MeshSpec, PinHoleSpec, PullSpec, SceneSpec } from '../lib/scene'
 
 /** Camera distance as a multiple of the scene's largest extent. */
@@ -167,7 +171,25 @@ function PinHoles({ holes }: { holes: readonly PinHoleSpec[] }) {
   )
 }
 
-function Dimension({ dim, portal }: { dim: DimensionSpec; portal: RefObject<HTMLDivElement | null> }) {
+const DIMENSION_LABEL_CLASS =
+  'rounded-sm border border-[#2f4a6b]/40 bg-white/95 px-1.5 py-0.5 font-mono text-xs whitespace-nowrap text-[#2f4a6b] shadow-sm'
+
+/** The label of a dimension line: plain text, or an in-place editor when `edit` is given. */
+function DimensionLabel({ label, edit }: { label: string; edit: DimensionEdit | undefined }) {
+  if (!edit) return <span className={`pointer-events-none ${DIMENSION_LABEL_CLASS}`}>{label}</span>
+  return (
+    <EditableDimension
+      edit={edit}
+      className={`pointer-events-auto inline-flex min-h-6 items-center gap-1 transition-colors hover:border-[#2f4a6b] hover:bg-white ${DIMENSION_LABEL_CLASS}`}
+      editorClassName="pointer-events-auto"
+    >
+      {label}
+      <PencilIcon aria-hidden="true" className="size-3 opacity-50" />
+    </EditableDimension>
+  )
+}
+
+function Dimension({ dim, portal, edit }: { dim: DimensionSpec; portal: RefObject<HTMLDivElement | null>; edit?: DimensionEdit }) {
   const mid: [number, number, number] = [(dim.from[0] + dim.to[0]) / 2, (dim.from[1] + dim.to[1]) / 2, (dim.from[2] + dim.to[2]) / 2]
   return (
     <group>
@@ -176,12 +198,14 @@ function Dimension({ dim, portal }: { dim: DimensionSpec; portal: RefObject<HTML
         <Line key={i} points={[a, b]} color={DIMENSION_COLOR} lineWidth={0.8} transparent opacity={0.7} />
       ))}
       <Html position={mid} center zIndexRange={[20, 0]} portal={portal as RefObject<HTMLElement>}>
-        <span className="pointer-events-none rounded-sm border border-[#2f4a6b]/40 bg-white/95 px-1.5 py-0.5 font-mono text-xs whitespace-nowrap text-[#2f4a6b] shadow-sm">
-          {dim.label}
-        </span>
+        <DimensionLabel label={dim.label} edit={edit} />
       </Html>
     </group>
   )
+}
+
+function editFor(edits: DimensionEdits | undefined, id: string): DimensionEdit | undefined {
+  return isDrawingDimId(id) ? edits?.[id] : undefined
 }
 
 type OrbitLike = { target: Vector3; update: () => void }
@@ -221,10 +245,12 @@ export type Viewer3DProps = {
   hoveredPartId: string | null
   onHover: (partId: string | null) => void
   onPick: (cabinetId: string) => void
+  /** Dimension labels (by `DimensionSpec.id`) that can be edited in place. */
+  dimensionEdits?: DimensionEdits
 }
 
 /** WebGL view; loaded client-side only (see ThreeView). */
-export default function Viewer3D({ scene, focusKey, hoveredPartId, onHover, onPick }: Viewer3DProps) {
+export default function Viewer3D({ scene, focusKey, hoveredPartId, onHover, onPick, dimensionEdits }: Viewer3DProps) {
   const floorSize = Math.max(8, Math.ceil(scene.extent * 6))
   const floorTexture = useFloorTexture(floorSize / 1.6)
   const [tx, ty, tz] = scene.focus.target
@@ -276,7 +302,7 @@ export default function Viewer3D({ scene, focusKey, hoveredPartId, onHover, onPi
         ))}
         <PinHoles holes={scene.pinHoles} />
         {scene.dimensions.map((dim) => (
-          <Dimension key={dim.id} dim={dim} portal={overlay} />
+          <Dimension key={dim.id} dim={dim} portal={overlay} edit={editFor(dimensionEdits, dim.id)} />
         ))}
         <OrbitControls makeDefault maxPolarAngle={Math.PI / 2 - 0.02} minDistance={0.3} maxDistance={40} enableDamping />
         <CameraRig focus={scene.focus} focusKey={focusKey} />

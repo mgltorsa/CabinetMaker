@@ -31,6 +31,7 @@ import { buildTop } from './top'
 
 export { validateBuild } from './validate'
 export { PRESETS, createPreset, type PresetInfo } from './presets'
+export { bayHeightsForFront, type FrontHeightEdit } from './front-height'
 
 export interface EngineContext {
   materials: Material[]

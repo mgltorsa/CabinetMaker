@@ -89,22 +89,33 @@ function shapeEl(s: Shape, style: DrawingStyle, units: UnitSystem): string {
   }
 }
 
-export function renderSvg(drawing: Drawing, options: SvgOptions): string {
+/** The SVG `viewBox` for a drawing: its bounds plus a margin, Y flipped (SVG user units). */
+export interface ViewBox {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export function svgViewBox(drawing: Drawing): ViewBox {
   const { minX, minY, maxX, maxY } = drawing.bounds
   const w = Number.isFinite(maxX - minX) && maxX > minX ? maxX - minX : 1
   const h = Number.isFinite(maxY - minY) && maxY > minY ? maxY - minY : 1
   const margin = Math.max(w, h) * MARGIN_FRACTION
-  const vbW = w + margin * 2
-  const vbH = h + margin * 2
+  return { x: minX - margin, y: -maxY - margin, w: w + margin * 2, h: h + margin * 2 }
+}
+
+export function renderSvg(drawing: Drawing, options: SvgOptions): string {
+  const vb = svgViewBox(drawing)
   const widthPx = options.widthPx !== undefined && options.widthPx > 0 ? options.widthPx : DEFAULT_WIDTH_PX
-  const heightPx = (widthPx * vbH) / vbW
+  const heightPx = (widthPx * vb.h) / vb.w
   const style = styleForDrawing(drawing)
   const title = escapeXml(drawing.title)
   const body = drawing.shapes.map((s) => shapeEl(s, style, options.units)).join('\n')
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${num(minX - margin)} ${num(-maxY - margin)} ${num(vbW)} ${num(vbH)}" width="${num(widthPx)}" height="${num(heightPx)}" role="img" aria-label="${title}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${num(vb.x)} ${num(vb.y)} ${num(vb.w)} ${num(vb.h)}" width="${num(widthPx)}" height="${num(heightPx)}" role="img" aria-label="${title}">`,
     `<title>${title}</title>`,
-    `<rect x="${num(minX - margin)}" y="${num(-maxY - margin)}" width="${num(vbW)}" height="${num(vbH)}" fill="#ffffff"/>`,
+    `<rect x="${num(vb.x)}" y="${num(vb.y)}" width="${num(vb.w)}" height="${num(vb.h)}" fill="#ffffff"/>`,
     body,
     '</svg>',
   ].join('\n')

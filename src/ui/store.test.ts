@@ -199,6 +199,22 @@ describe('designer store: sections and bays', () => {
     for (const b of bays()) get().removeBay('cab_1', 'sec_1', b.id)
     expect(bays()).toHaveLength(1)
   })
+
+  it('sets every bay height of a section in one update', () => {
+    const { get, cab } = setup()
+    const before = get().project
+    get().updateBayHeights('cab_1', 'sec_1', [180, null])
+    expect(cab().sections[0]!.bays.map((b) => b.height)).toEqual([180, null])
+    expect(before.cabinets[0]!.sections[0]!.bays[0]!.height).toBe(150)
+  })
+
+  it('ignores bay heights whose count does not match the section', () => {
+    const { get } = setup()
+    const before = get().project
+    get().updateBayHeights('cab_1', 'sec_1', [180])
+    get().updateBayHeights('cab_1', 'nope', [180, null])
+    expect(get().project).toBe(before)
+  })
 })
 
 describe('designer store: count limits keep the project valid', () => {

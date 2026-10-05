@@ -2,7 +2,7 @@
  * Small constructors for the neutral `Shape` model (mm, +Y up). Generators use
  * these instead of object literals so every shape carries an explicit layer.
  */
-import type { DrawingLayer, Mm, Shape, Vec2 } from '@/core/types'
+import type { DrawingDimId, DrawingLayer, Mm, Shape, Vec2 } from '@/core/types'
 
 export type LineShape = Extract<Shape, { type: 'line' }>
 export type RectShape = Extract<Shape, { type: 'rect' }>
@@ -59,6 +59,11 @@ export function text(
 export function dim(x1: Mm, y1: Mm, x2: Mm, y2: Mm, offset: Mm, label?: string): DimShape {
   const base: DimShape = { type: 'dim', x1, y1, x2, y2, offset }
   return label === undefined ? base : { ...base, label }
+}
+
+/** Tag a dimension or note with the stable id of the cabinet value it states (no-op for `undefined`). */
+export function withId<T extends DimShape | TextShape>(shape: T, id: DrawingDimId | undefined): T {
+  return id === undefined ? shape : { ...shape, id }
 }
 
 /** Arrow from `from` to `to` (head at `to`) drawn as three lines. */

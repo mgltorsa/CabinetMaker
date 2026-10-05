@@ -65,6 +65,27 @@ describe('DrawingView', () => {
     expect(html).toContain('role="img"')
   })
 
+  it('renders no overlay (unchanged markup) when nothing is editable', () => {
+    const shapes: Drawing['shapes'] = [{ type: 'dim', x1: 0, y1: 0, x2: 100, y2: 0, offset: -10, id: 'width' }]
+    const html = renderToStaticMarkup(<DrawingView make={() => drawing(shapes)} units="metric" />)
+    expect(html).not.toContain('<button')
+    expect(html).toMatch(/^<figure[^>]*><div class="drawing-svg/)
+  })
+
+  it('lays an accessible edit button over each editable dimension label', () => {
+    const shapes: Drawing['shapes'] = [
+      { type: 'dim', x1: 0, y1: 0, x2: 100, y2: 0, offset: -10, id: 'width' },
+      { type: 'dim', x1: 0, y1: 0, x2: 0, y2: 50, offset: 10, id: 'height' },
+      { type: 'dim', x1: 0, y1: 0, x2: 50, y2: 0, offset: -20, label: 'read only' },
+    ]
+    const edit = (name: string, value: number) => ({ name, value, units: 'imperial' as const, min: 50, max: 3000, onCommit: () => null })
+    const html = renderToStaticMarkup(<DrawingView make={() => drawing(shapes)} units="imperial" label="Front" editable={{ width: edit('Width', 600) }} />)
+    expect(html.match(/<button/g)).toHaveLength(1)
+    expect(html).toContain('aria-label="Width 23 5/8 in, edit"')
+    expect(html).toContain('role="group" aria-label="Edit dimensions of Front"')
+    expect(html).toMatch(/style="left:[\d.]+%;top:[\d.]+%;width:[\d.]+%;height:[\d.]+%;transform:translate\(-50%, -50%\) rotate\(0deg\)"/)
+  })
+
   it('reports a drawing that throws instead of crashing', () => {
     const html = renderToStaticMarkup(
       <DrawingView

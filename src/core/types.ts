@@ -611,7 +611,17 @@ export type Shape =
   | { type: 'rect'; x: Mm; y: Mm; w: Mm; h: Mm; layer: DrawingLayer; fill?: string }
   | { type: 'circle'; cx: Mm; cy: Mm; r: Mm; layer: DrawingLayer }
   | { type: 'polyline'; points: Vec2[]; closed: boolean; layer: DrawingLayer }
-  | { type: 'text'; x: Mm; y: Mm; text: string; size: Mm; anchor: 'start' | 'middle' | 'end'; layer: DrawingLayer }
+  | {
+      type: 'text'
+      x: Mm
+      y: Mm
+      text: string
+      size: Mm
+      anchor: 'start' | 'middle' | 'end'
+      layer: DrawingLayer
+      /** Stable id of an editable note (e.g. `floor-height`); see `DrawingDimId`. */
+      id?: DrawingDimId
+    }
   | {
       type: 'dim'
       x1: Mm
@@ -622,7 +632,18 @@ export type Shape =
       offset: Mm
       /** Pre-formatted label; renderer formats the distance when omitted. */
       label?: string
+      /** Stable id telling the UI which value this dimension states; see `DrawingDimId`. */
+      id?: DrawingDimId
     }
+
+/**
+ * Ids of the dimensions an elevation states about the cabinet's inputs, so a
+ * UI can edit them in place: overall `width` / `height` / `depth`, the
+ * `toe-kick` height, the wall cabinet's `floor-height` note, and a front's
+ * height as `front:{sectionIndex}:{bayIndex}` (0-based indices into
+ * `Cabinet.sections` / `Section.bays`).
+ */
+export type DrawingDimId = 'width' | 'height' | 'depth' | 'toe-kick' | 'floor-height' | `front:${number}:${number}`
 
 /**
  * Neutral 2D drawing. Model space is mm with +Y **up** (like a technical

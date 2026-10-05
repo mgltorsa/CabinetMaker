@@ -34,6 +34,11 @@ export interface BayLayout {
   /** 0-based section and bay index. */
   section: number
   index: number
+  /**
+   * The bay height the layout used (the request, or its share / scaled size):
+   * the front height for frameless-overlay, the opening height otherwise.
+   */
+  height: Mm
   /** Clear interior height for drawer boxes and shelves (inside the carcass). */
   openingY: Span
   /** Front rectangle in the front plane (for open bays: the slot it would occupy). */
@@ -174,7 +179,7 @@ function overlayRows(cabinet: Cabinet, d: Dims, s: Section, i: number, cols: Col
   const bays = s.bays.map((bay, j) => {
     const top = j === 0 ? d.interiorY.hi : boundaries[j - 1]!.lo
     const bottom = j === n - 1 ? d.interiorY.lo : boundaries[j]!.hi
-    return { bay, section: i, index: j, openingY: intersectSpan(span(bottom, top), d.interiorY), front: { x: frontX, y: fronts[j]! } }
+    return { bay, section: i, index: j, height: spanSize(fronts[j]!), openingY: intersectSpan(span(bottom, top), d.interiorY), front: { x: frontX, y: fronts[j]! } }
   })
   return { bays, partitions: boundaries.filter((b) => spanSize(b) > 0), midRails: [], scaled: dist.status === 'scaled' }
 }
@@ -198,6 +203,7 @@ function openingRows(cabinet: Cabinet, d: Dims, s: Section, i: number, openingX:
     bay,
     section: i,
     index: j,
+    height: spanSize(openings[j]!),
     openingY: intersectSpan(openings[j]!, d.interiorY),
     front: frontFor(cabinet, d, openingX, openings[j]!, { first: i === 0, last: i === cabinet.sections.length - 1, top: j === 0, bottom: j === n - 1 }),
   }))
