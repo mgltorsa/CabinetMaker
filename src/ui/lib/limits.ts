@@ -50,3 +50,20 @@ export const MAX_TAB_WIDTH: Mm = 40
 export const MATERIAL_THICKNESS: Bounds = { min: 0.1, max: 200 }
 /** Sheet length / width and linear board width / stock length. */
 export const STOCK_SIZE: Bounds = { min: 1, max: MAX_LENGTH }
+// ─── Costs (estimate parameters, hardware catalog) ──────────────────────────
+
+/** Any money amount typed by the user (unit costs, minimum charge). */
+export const MAX_MONEY = 10_000_000
+/** Material / hardware markup as a fraction of cost: up to +1000 %. */
+export const MARKUP: Bounds = { min: 0, max: 10 }
+/** Tax rate as a fraction of the price: up to 100 %. */
+export const TAX_RATE: Bounds = { min: 0, max: 1 }
+/** Quantity on one extra charge line. */
+export const EXTRA_QTY: Bounds = { min: 0, max: 100_000 }
+/** User-defined extra charge lines per project. */
+export const MAX_EXTRA_CHARGES = 50
+
+/** Kind-specific hardware props edited in the catalog (editor only; the validator accepts any finite prop). */
+export const SLIDE_LENGTH: Bounds = { min: 100, max: 1500 }
+export const HINGE_OPENING_ANGLE: Bounds = { min: 1, max: 270 }
+export const PULL_CENTERS: Bounds = { min: 16, max: 1500 }

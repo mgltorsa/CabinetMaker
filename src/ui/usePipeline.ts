@@ -26,6 +26,15 @@ export function emptyResult(project: Project): PipelineResult {
       subtotal: 0,
       marginAmount: 0,
       price: 0,
+      extras: [],
+      extrasCost: 0,
+      materialMarkupAmount: 0,
+      hardwareMarkupAmount: 0,
+      markupAmount: 0,
+      minimumChargeAdjustment: 0,
+      taxRate: 0,
+      tax: 0,
+      total: 0,
     },
   }
 }

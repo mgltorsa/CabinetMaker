@@ -4,6 +4,7 @@ import {
   type Cabinet,
   type ConstructionMethod,
   type EstimateSettings,
+  type ExtraCharge,
   type HardwareItem,
   type LinearMaterial,
   type Machine,
@@ -18,11 +19,15 @@ import {
 } from '@/core/types'
 import {
   CABINET_DIMENSION,
+  EXTRA_QTY,
   FLOOR_HEIGHT,
+  MARKUP,
   MAX_BAYS,
   MAX_CABINETS,
   MAX_CATALOG_ITEMS,
+  MAX_EXTRA_CHARGES,
   MAX_LENGTH,
+  MAX_MONEY,
   MAX_SECTIONS,
   MAX_SHELF_PIN_DIAMETER,
   MAX_SHELVES,
@@ -33,6 +38,7 @@ import {
   MIN_TAB_SPACING,
   SECTION_SIZE,
   STOCK_SIZE,
+  TAX_RATE,
   TOOL_NUMBER,
 } from './limits'
 import { isHexColor } from './materials'
@@ -237,6 +243,14 @@ const nest = obj<NestSettings>({ kerf: length, edgeTrim: length, partSpacing: le
 
 const minutes = nonNegative()
 
+const extraCharge = obj<ExtraCharge>({
+  id: str,
+  label: str,
+  qty: numIn(EXTRA_QTY),
+  unit: oneOf('pcs', 'h', 'm', 'm²', 'job'),
+  unitCost: nonNegative(MAX_MONEY),
+})
+
 const estimate = obj<EstimateSettings>({
   currency: str,
   shopRate: nonNegative(),
@@ -251,6 +265,12 @@ const estimate = obj<EstimateSettings>({
     minutesPerHardwareItem: minutes,
     assemblyMinutesPerCabinet: minutes,
   }),
+  // Optional: projects saved before these existed omit them.
+  materialMarkup: optional(numIn(MARKUP)),
+  hardwareMarkup: optional(numIn(MARKUP)),
+  extras: optional(uniqueList(extraCharge, { max: MAX_EXTRA_CHARGES })),
+  taxRate: optional(numIn(TAX_RATE)),
+  minimumCharge: optional(nonNegative(MAX_MONEY)),
 })
 
 const vec2 = obj({ x: num, y: num })

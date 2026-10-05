@@ -5,6 +5,7 @@ import { formatLength } from '@/core/units'
 import { DRAWER_JOINERY, JOINERY, materialOptions, withCurrent } from '../../lib/options'
 import { useDesigner } from '../../store'
 import { MaterialLibrary } from '../catalog/MaterialLibrary'
+import { HardwareCatalogCard } from '../catalog/HardwareCatalog'
 import { FieldGrid, LengthInput, SelectField } from '../fields'
 import { SpecCard } from './SpecCard'
 
@@ -63,6 +64,7 @@ export function BuildSection({ cabinet, project }: { cabinet: Cabinet; project: 
         )}
       </SpecCard>
       <MaterialLibrary project={project} />
+      <HardwareCatalogCard project={project} />
     </div>
   )
 }

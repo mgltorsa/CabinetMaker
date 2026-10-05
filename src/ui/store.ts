@@ -12,6 +12,7 @@ import type {
   CabinetType,
   ConstructionMethod,
   EstimateSettings,
+  HardwareKind,
   Id,
   Machine,
   Material,
@@ -25,6 +26,7 @@ import { createPreset } from '@/engine/presets'
 import { browserStorage, loadProject, REJECTED_STORAGE_KEY } from './persistence'
 import { notify } from './toast'
 import * as ops from './projectOps'
+import * as costOps from './costOps'
 
 /** What the 3D view shows (the floating "Toggle visibility" pills). */
 export interface ViewToggles {
@@ -111,6 +113,19 @@ export interface DesignerActions {
   /** Blocked while the material is in use, unless `replacementId` takes over every use first. */
   deleteMaterial: (id: Id, replacementId?: Id) => void
   replaceMaterialUses: (fromId: Id, toId: Id) => void
+  /** Hardware catalog (02·5). Returns the new item's id, or null at the catalog limit. */
+  addHardwareItem: (kind: HardwareKind) => Id | null
+  updateHardwareItem: (id: Id, patch: costOps.HardwarePatch) => void
+  setHardwareProp: (id: Id, key: string, value: number) => void
+  duplicateHardwareItem: (id: Id) => void
+  /** Deletes an unused item; refused while a cabinet uses it (use `replaceHardwareItem`). */
+  deleteHardwareItem: (id: Id) => void
+  /** Moves every cabinet onto `replacementId` (null: no pull), then deletes the item. */
+  replaceHardwareItem: (id: Id, replacementId: Id | null) => void
+  /** Estimate extra charges (03·3). */
+  addExtraCharge: () => void
+  updateExtraCharge: (id: Id, patch: costOps.ExtraChargePatch) => void
+  removeExtraCharge: (id: Id) => void
 }
 
 export interface DesignerState extends DesignerActions {
@@ -217,6 +232,19 @@ export function createDesignerStore(initial: Project = createProject()): Designe
       },
       deleteMaterial: (id, replacementId) => edit((p) => ops.deleteMaterial(p, id, replacementId)),
       replaceMaterialUses: (fromId, toId) => edit((p) => ops.replaceMaterialUses(p, fromId, toId)),
+      addHardwareItem: (kind) => {
+        const added = costOps.addHardwareItem(get().project, kind)
+        if (added.id !== null) set({ project: added.project })
+        return added.id
+      },
+      updateHardwareItem: (id, patch) => edit((p) => costOps.updateHardwareItem(p, id, patch)),
+      setHardwareProp: (id, key, value) => edit((p) => costOps.setHardwareProp(p, id, key, value)),
+      duplicateHardwareItem: (id) => edit((p) => costOps.duplicateHardwareItem(p, id).project),
+      deleteHardwareItem: (id) => edit((p) => costOps.deleteHardwareItem(p, id)),
+      replaceHardwareItem: (id, replacementId) => edit((p) => costOps.replaceHardwareItem(p, id, replacementId)),
+      addExtraCharge: () => edit((p) => costOps.addExtraCharge(p).project),
+      updateExtraCharge: (id, patch) => edit((p) => costOps.updateExtraCharge(p, id, patch)),
+      removeExtraCharge: (id) => edit((p) => costOps.removeExtraCharge(p, id)),
     }
   })
 }

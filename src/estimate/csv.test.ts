@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fixtureProject } from '@/core/fixtures'
-import type { Bom, Project } from '@/core/types'
+import type { Bom, Estimate, Project } from '@/core/types'
 import { bomToCsv, csvCell, partsToCsv, toCsv } from './csv'
 
 const CRLF = '\r\n'
@@ -135,6 +135,45 @@ describe('bomToCsv', () => {
     expect(lines(bomToCsv({ parts: [], lines: [] }, 'EUR'))).toEqual([
       'Category,Description,Manufacturer,SKU,Qty,Unit,Unit cost (EUR),Total (EUR)',
       'Total,,,,,,,0.00',
+    ])
+  })
+
+  it('appends extra charges and the estimate summary through tax and total when given an estimate', () => {
+    const bom = linesBom()
+    const estimate: Estimate = {
+      currency: 'USD',
+      materials: bom.lines.slice(0, 2),
+      hardware: bom.lines.slice(2),
+      labor: [{ bucket: 'cutting', minutes: 60, cost: 65 }],
+      materialCost: 193.46,
+      hardwareCost: 26,
+      laborCost: 65,
+      extras: [{ category: 'extra', refId: 'x1', description: '=Installation', qty: 3, unit: 'h', unitCost: 50, total: 150 }],
+      extrasCost: 150,
+      materialMarkupAmount: 19.35,
+      hardwareMarkupAmount: 0,
+      markupAmount: 19.35,
+      subtotal: 453.81,
+      marginAmount: 113.45,
+      minimumChargeAdjustment: 32.74,
+      price: 600,
+      taxRate: 0.075,
+      tax: 45,
+      total: 645,
+    }
+    expect(lines(bomToCsv(bom, 'USD', estimate)).slice(5)).toEqual([
+      "extra,'=Installation,,,3,h,50.00,150.00",
+      'Materials,,,,,,,193.46',
+      'Hardware,,,,,,,26.00',
+      'Labor,,,,,,,65.00',
+      'Extra charges,,,,,,,150.00',
+      'Markup,,,,,,,19.35',
+      'Subtotal,,,,,,,453.81',
+      'Margin,,,,,,,113.45',
+      'Minimum charge adjustment,,,,,,,32.74',
+      'Price (excl. tax),,,,,,,600.00',
+      'Tax (7.5 %),,,,,,,45.00',
+      'Total,,,,,,,645.00',
     ])
   })
 })

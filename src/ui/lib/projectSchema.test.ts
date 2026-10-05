@@ -3,7 +3,7 @@ import { createProject } from '@/core/defaults'
 import { fixtureProject } from '@/core/fixtures'
 import type { Cabinet, Project } from '@/core/types'
 import { PRESETS, createPreset } from '@/engine/presets'
-import { MAX_BAYS, MAX_CABINETS, MAX_SECTIONS } from './limits'
+import { MARKUP, MAX_BAYS, MAX_CABINETS, MAX_EXTRA_CHARGES, MAX_MONEY, MAX_SECTIONS, TAX_RATE } from './limits'
 import { validateProject } from './projectSchema'
 
 /** JSON round trip of the fixture, edited in place (the copy is ours). */
@@ -98,5 +98,56 @@ describe('validateProject: unique ids', () => {
       sections.push({ id: 'sec_2', width: null, bays: [{ ...sections[0]!.bays[0]! }] })
     })
     expect(validateProject(value)).toMatch(/^project\.cabinets\[0\]\.sections\[1\]\.bays\[0\]\.id duplicates/)
+  })
+})
+
+describe('validateProject: estimate commercial parameters', () => {
+  const extra = { id: 'x1', label: 'Installation', qty: 3, unit: 'h' as const, unitCost: 50 }
+  const loose = (p: Project): Record<string, unknown> => p.estimate as unknown as Record<string, unknown>
+
+  it('accepts a project saved before markups, extras, tax and minimum charge existed', () => {
+    const legacy = edited((p) => {
+      const { currency, shopRate, margin, linearWaste, labor } = p.estimate
+      p.estimate = { currency, shopRate, margin, linearWaste, labor }
+    })
+    expect(validateProject(legacy)).toBeNull()
+  })
+
+  it('accepts every extra charge unit and a full set of parameters', () => {
+    const units = ['pcs', 'h', 'm', 'm²', 'job'] as const
+    const value = edited((p) => {
+      p.estimate = {
+        ...p.estimate,
+        materialMarkup: 0.15,
+        hardwareMarkup: MARKUP.max,
+        taxRate: TAX_RATE.max,
+        minimumCharge: 500,
+        extras: units.map((unit, i) => ({ ...extra, id: `x${i}`, unit })),
+      }
+    })
+    expect(validateProject(value)).toBeNull()
+  })
+
+  it.each([
+    ['a negative material markup', (p: Project) => (p.estimate.materialMarkup = -0.1), 'project.estimate.materialMarkup'],
+    ['a huge hardware markup', (p: Project) => (p.estimate.hardwareMarkup = MARKUP.max + 1), 'project.estimate.hardwareMarkup'],
+    ['a tax rate above 100 %', (p: Project) => (p.estimate.taxRate = 1.5), 'project.estimate.taxRate'],
+    ['a non-numeric tax rate', (p: Project) => (loose(p).taxRate = '10%'), 'project.estimate.taxRate'],
+    ['a negative minimum charge', (p: Project) => (p.estimate.minimumCharge = -1), 'project.estimate.minimumCharge'],
+    ['extras that are not a list', (p: Project) => (loose(p).extras = {}), 'project.estimate.extras'],
+    ['an extra with an unknown unit', (p: Project) => (loose(p).extras = [{ ...extra, unit: 'kg' }]), 'project.estimate.extras[0].unit'],
+    ['an extra with a negative quantity', (p: Project) => (p.estimate.extras = [{ ...extra, qty: -1 }]), 'project.estimate.extras[0].qty'],
+    ['an extra with a huge unit cost', (p: Project) => (p.estimate.extras = [{ ...extra, unitCost: MAX_MONEY + 1 }]), 'project.estimate.extras[0].unitCost'],
+    ['an extra without a label', (p: Project) => (loose(p).extras = [{ ...extra, label: null }]), 'project.estimate.extras[0].label'],
+    ['duplicate extra ids', (p: Project) => (p.estimate.extras = [extra, { ...extra }]), 'project.estimate.extras[1].id'],
+  ])('rejects %s and names the path', (_, edit, path) => {
+    const error = validateProject(edited(edit))
+    expect(error).not.toBeNull()
+    expect(error!.startsWith(path)).toBe(true)
+  })
+
+  it('bounds the number of extra charges', () => {
+    const value = edited((p) => (p.estimate.extras = Array.from({ length: MAX_EXTRA_CHARGES + 1 }, (_, i) => ({ ...extra, id: `x${i}` }))))
+    expect(validateProject(value)).toMatch(new RegExp(`^project\\.estimate\\.extras must have at most ${MAX_EXTRA_CHARGES}`))
   })
 })

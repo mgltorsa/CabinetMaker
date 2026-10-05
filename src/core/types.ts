@@ -300,6 +300,18 @@ export interface NestSettings {
   ignoreGrain: boolean
 }
 
+/** Unit of a user-defined extra charge line (finishing, delivery, installation…). */
+export type ExtraChargeUnit = 'pcs' | 'h' | 'm' | 'm²' | 'job'
+
+/** A user-defined line added to the estimate on top of materials, hardware and labor. */
+export interface ExtraCharge {
+  id: Id
+  label: string
+  qty: number
+  unit: ExtraChargeUnit
+  unitCost: number
+}
+
 export interface EstimateSettings {
   currency: string
   shopRate: number
@@ -315,6 +327,20 @@ export interface EstimateSettings {
     minutesPerHardwareItem: number
     assemblyMinutesPerCabinet: number
   }
+  /*
+   * Commercial parameters. Optional so projects saved before they existed
+   * still load; absent means 0 / none.
+   */
+  /** Markup on material cost before margin (0.1 = +10 %). */
+  materialMarkup?: number
+  /** Markup on hardware cost before margin (0.1 = +10 %). */
+  hardwareMarkup?: number
+  /** User-defined charges (finishing, delivery, installation, design fee…). */
+  extras?: ExtraCharge[]
+  /** Tax on the price, shown separately (0.1 = 10 %). */
+  taxRate?: number
+  /** Lowest pre-tax price charged for a job; 0 or absent = no minimum. */
+  minimumCharge?: number
 }
 
 // ─── Room (phase 6) ─────────────────────────────────────────────────────────
@@ -556,7 +582,7 @@ export interface CamResult {
 
 // ─── Estimate output ────────────────────────────────────────────────────────
 
-export type BomCategory = 'sheet' | 'linear' | 'hardware'
+export type BomCategory = 'sheet' | 'linear' | 'hardware' | 'extra'
 
 export interface BomLine {
   category: BomCategory
@@ -565,7 +591,7 @@ export interface BomLine {
   manufacturer?: string
   sku?: string
   qty: number
-  unit: 'sheet' | 'm' | 'pcs'
+  unit: 'sheet' | 'm' | 'pcs' | ExtraChargeUnit
   unitCost: number
   total: number
 }
@@ -601,9 +627,25 @@ export interface Estimate {
   materialCost: number
   hardwareCost: number
   laborCost: number
+  /** Cost basis the margin applies to: materials + hardware + labor + extras + markups. */
   subtotal: number
   marginAmount: number
+  /** Pre-tax price: subtotal + marginAmount + minimumChargeAdjustment. */
   price: number
+  /** User-defined extra charge lines (category 'extra'). */
+  extras: BomLine[]
+  extrasCost: number
+  materialMarkupAmount: number
+  hardwareMarkupAmount: number
+  /** materialMarkupAmount + hardwareMarkupAmount. */
+  markupAmount: number
+  /** Added so the price reaches the minimum charge; 0 when it already does. */
+  minimumChargeAdjustment: number
+  /** Tax rate applied (fraction), for labels. */
+  taxRate: number
+  tax: number
+  /** price + tax. */
+  total: number
 }
 
 // ─── Drawings ───────────────────────────────────────────────────────────────
