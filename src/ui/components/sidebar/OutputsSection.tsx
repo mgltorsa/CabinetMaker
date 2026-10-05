@@ -1,7 +1,6 @@
 'use client'
 
-import { DownloadIcon, FileTextIcon, Loader2Icon } from 'lucide-react'
-import { BoxIcon } from 'lucide-react'
+import { BoxIcon, DownloadIcon, Loader2Icon } from 'lucide-react'
 import type { Estimate, EstimateSettings, Project } from '@/core/types'
 import type { PipelineResult } from '@/pipeline'
 import { money, percent } from '../../lib/format'
@@ -12,6 +11,7 @@ import type { Exports } from '../../useExports'
 import { CheckboxField, CommitField, FieldGrid, LengthInput, NumberInput } from '../fields'
 import { Button } from '../ui/button'
 import { ExtraCharges } from './ExtraCharges'
+import { PlanBookCard } from './PlanBookCard'
 import { SpecCard } from './SpecCard'
 
 const MAX_MARGIN_PERCENT = 95
@@ -144,13 +144,7 @@ export function OutputsSection({ project, result, exports }: OutputsSectionProps
         </Button>
       </SpecCard>
 
-      <SpecCard index="03·4" title="Plan book" summary="PDF · elevations, panels, sheets, BOM">
-        <p className="text-xs text-muted-foreground">One PDF from the same drawings you see on screen: cover, elevations, panel details, sheet layouts, cut list, BOM and estimate.</p>
-        <Button size="sm" onClick={() => void exports.downloadPdf()} disabled={exports.isPdfBusy} aria-busy={exports.isPdfBusy}>
-          {exports.isPdfBusy ? <Loader2Icon className="animate-spin" /> : <FileTextIcon />}
-          {exports.isPdfBusy ? 'Building PDF…' : 'Download PDF'}
-        </Button>
-      </SpecCard>
+      <PlanBookCard project={project} result={result} exports={exports} />
 
       <SpecCard index="03·5" title="Blender / Home Builder" summary={`${project.cabinets.length} cabinet${project.cabinets.length === 1 ? '' : 's'} · GLB + import script`}>
         <p className="text-xs text-muted-foreground">

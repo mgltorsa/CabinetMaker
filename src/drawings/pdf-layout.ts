@@ -21,7 +21,8 @@ export const PAGE_SIZES: Readonly<Record<PageSizeName, PageSize>> = {
 export const PT_PER_MM = 72 / 25.4
 
 export const PAGE_MARGIN: Mm = 10
-export const TITLE_BLOCK_HEIGHT: Mm = 14
+/** Two 9 mm rows of cells plus a brand cell (logo, company, contact). */
+export const TITLE_BLOCK_HEIGHT: Mm = 18
 /** Gap between the content area and the title block. */
 export const CONTENT_GAP: Mm = 4
 

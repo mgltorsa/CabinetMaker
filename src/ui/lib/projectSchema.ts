@@ -61,6 +61,7 @@ import {
   str,
   uniqueList,
 } from './schema'
+import { pdfSettings } from './pdfSchema'
 
 const catalog = { max: MAX_CATALOG_ITEMS }
 
@@ -308,6 +309,7 @@ const projectShape = obj<Project>({
   nest,
   estimate,
   room: nullable(room),
+  pdf: optional(pdfSettings),
 })
 
 /** Material references every cabinet needs before the engine can build it. */

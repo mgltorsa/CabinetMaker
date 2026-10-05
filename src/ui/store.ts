@@ -24,6 +24,8 @@ import type {
   UnitSystem,
 } from '@/core/types'
 import { createPreset } from '@/engine/presets'
+import { withPdfSettings, withWatermark } from '@/core/pdf-settings'
+import type { PdfSettings, PdfWatermark } from '@/core/types'
 import { browserStorage, loadProject, REJECTED_STORAGE_KEY } from './persistence'
 import { notify } from './toast'
 import * as ops from './projectOps'
@@ -129,6 +131,9 @@ export interface DesignerActions {
   addExtraCharge: () => void
   updateExtraCharge: (id: Id, patch: costOps.ExtraChargePatch) => void
   removeExtraCharge: (id: Id) => void
+  /** Plan-book PDF: title block fields, sections, page size, images. */
+  updatePdfSettings: (patch: Partial<Omit<PdfSettings, 'watermark'>>) => void
+  updateWatermark: (patch: Partial<PdfWatermark>) => void
 }
 
 export interface DesignerState extends DesignerActions {
@@ -250,6 +255,8 @@ export function createDesignerStore(initial: Project = createProject()): Designe
       addExtraCharge: () => edit((p) => costOps.addExtraCharge(p).project),
       updateExtraCharge: (id, patch) => edit((p) => costOps.updateExtraCharge(p, id, patch)),
       removeExtraCharge: (id) => edit((p) => costOps.removeExtraCharge(p, id)),
+      updatePdfSettings: (patch) => edit((p) => withPdfSettings(p, patch)),
+      updateWatermark: (patch) => edit((p) => withWatermark(p, patch)),
     }
   })
 }

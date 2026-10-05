@@ -66,3 +66,38 @@ export function fitWidth(font: WidthMeasure, value: string, size: number, maxWid
   }
   return lo === 0 ? '' : chars.slice(0, lo).join('') + ELLIPSIS
 }
+
+/** `value` cut back until `value...` fits `maxWidth`. */
+function withEllipsis(font: WidthMeasure, value: string, size: number, maxWidth: number): string {
+  const chars = Array.from(value.trimEnd())
+  while (chars.length > 0 && font.widthOfTextAtSize(chars.join('') + ELLIPSIS, size) > maxWidth) chars.pop()
+  return chars.length === 0 ? '' : chars.join('').trimEnd() + ELLIPSIS
+}
+
+/**
+ * Greedy word wrap of user text into at most `maxLines` WinAnsi-safe lines.
+ * Newlines start a new paragraph; an over-long word is cut with an ellipsis,
+ * and text beyond `maxLines` ends the last kept line with an ellipsis.
+ */
+export function wrapText(font: WidthMeasure, value: string, size: number, maxWidth: number, maxLines: number): string[] {
+  const fits = (s: string): boolean => font.widthOfTextAtSize(s, size) <= maxWidth
+  const lines: string[] = []
+  for (const paragraph of value.trim().split(/\r?\n/)) {
+    let line = ''
+    for (const word of toWinAnsi(paragraph).split(' ').filter((w) => w !== '')) {
+      const candidate = line === '' ? word : `${line} ${word}`
+      if (fits(candidate)) {
+        line = candidate
+        continue
+      }
+      if (line !== '') lines.push(line)
+      line = fits(word) ? word : fitWidth(font, word, size, maxWidth)
+    }
+    lines.push(line)
+  }
+  const kept = lines.length === 1 && lines[0] === '' ? [] : lines
+  if (kept.length <= maxLines) return kept
+  const head = kept.slice(0, Math.max(maxLines, 0))
+  const last = head.pop()
+  return last === undefined ? [] : [...head, withEllipsis(font, last, size, maxWidth)]
+}

@@ -69,3 +69,9 @@ export const HINGE_OPENING_ANGLE: Bounds = { min: 1, max: 270 }
 export const PULL_CENTERS: Bounds = { min: 16, max: 1500 }
 /** Hanging-rod drop below the bay top (rod centre). */
 export const ROD_DROP: Bounds = { min: 1, max: 3000 }
+/**
+ * Plan-book PDF settings: watermark opacity / size / rotation, text lengths and
+ * the logo and watermark image caps. Defined next to the settings so the PDF
+ * renderer (a domain module) clamps to the same bounds.
+ */
+export { PDF_LIMITS } from '@/core/pdf-settings'

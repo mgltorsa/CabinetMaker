@@ -5,6 +5,9 @@
 import { describe, expect, it } from 'vitest'
 import { fixtureProject } from '@/core/fixtures'
 import type { Project } from '@/core/types'
+import { DEFAULT_PDF_SETTINGS, DEFAULT_WATERMARK, PDF_SECTION_KEYS } from '@/core/pdf-settings'
+import { dataUrl, tinyPng } from '@/core/testing/images'
+import type { PdfSectionKey, PdfSettings } from '@/core/types'
 import { emitGcode, generateToolpaths, parseGcode } from '@/cam'
 import { downwardFeedViolations } from '@/cam/testing/feeds'
 import { sheetLayout } from '@/drawings'
@@ -126,5 +129,29 @@ describe.each(wideToolProjects())('pipeline compensates a profile tool wider tha
       const cam = generateToolpaths({ sheet, parts: partsById, machine: project.machine, tools: project.tools })
       expect(cam.warnings.filter((w) => w.level === 'error')).toEqual([])
     }
+  })
+})
+
+/** Plan-book settings: each section switched off alone, all off, and full branding. */
+function pdfVariants(): [string, PdfSettings][] {
+  const logo = dataUrl('image/png', tinyPng(6, 3))
+  const branded: PdfSettings = { ...DEFAULT_PDF_SETTINGS, company: 'Ateliér Ñ', client: 'Ms Smith', logo, notes: 'Notes\nline two' }
+  const off = (keys: readonly PdfSectionKey[]): PdfSettings['sections'] => ({ ...DEFAULT_PDF_SETTINGS.sections, ...Object.fromEntries(keys.map((k) => [k, false])) })
+  return [
+    ...PDF_SECTION_KEYS.map((k): [string, PdfSettings] => [`without ${k}`, { ...branded, sections: off([k]) }]),
+    ['with every section off', { ...branded, sections: off(PDF_SECTION_KEYS) }],
+    ['A4 with a tiled image watermark over the drawings', { ...branded, pageSize: 'a4', watermark: { ...DEFAULT_WATERMARK, enabled: true, kind: 'image', placement: 'tiled', layer: 'over', sizePercent: 20 } }],
+  ]
+}
+
+describe.each(projectsUnderTest().map((p) => [p.cabinets.length, p] as const))('plan book settings (%i cabinets)', (_n, base) => {
+  const result = runPipeline(base)
+
+  it.each(pdfVariants())('renders exactly planPageCount pages %s', async (_label, pdf) => {
+    const project = { ...base, pdf }
+    const bytes = await buildPlanPdf(project, result)
+    const { PDFDocument } = await import('pdf-lib')
+    const doc = await PDFDocument.load(bytes)
+    expect(doc.getPageCount()).toBe(planPageCount(project, result))
   })
 })
