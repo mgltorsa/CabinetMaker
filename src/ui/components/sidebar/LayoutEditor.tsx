@@ -3,11 +3,12 @@
 import { ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, ArrowUpIcon, PlusIcon, Trash2Icon } from 'lucide-react'
 import { useState } from 'react'
 import type { Bay, Cabinet, UnitSystem } from '@/core/types'
+import { DEFAULT_ROD_DROP } from '@/engine/constants'
 import { cn } from '../../lib/cn'
-import { MAX_BAYS, MAX_SECTIONS, MAX_SHELVES, SECTION_SIZE } from '../../lib/limits'
+import { MAX_BAYS, MAX_SECTIONS, MAX_SHELVES, ROD_DROP, SECTION_SIZE } from '../../lib/limits'
 import { BAY_KINDS } from '../../lib/options'
 import { useDesigner } from '../../store'
-import { NumberInput, OptionalLengthInput, SelectField, type SelectOption } from '../fields'
+import { CheckboxField, LengthInput, NumberInput, OptionalLengthInput, SelectField, type SelectOption } from '../fields'
 import { Button } from '../ui/button'
 import { CardCaption } from './SpecCard'
 
@@ -47,6 +48,12 @@ function BayFace({ bay }: { bay: Bay }) {
   )
 }
 
+/** Dashed line near the top of a door/open bay that holds a hanging rod. */
+function RodMark({ bay }: { bay: Bay }) {
+  if (bay.kind === 'drawer' || bay.rod === undefined) return null
+  return <span data-rod="true" aria-hidden="true" className="absolute inset-x-1 top-[22%] border-t-2 border-dashed border-foreground/55" />
+}
+
 type LayoutEditorProps = { cabinet: Cabinet; units: UnitSystem }
 
 /** Visual sections/bays editor: pick a bay on the front diagram, edit it below. */
@@ -59,6 +66,7 @@ export function LayoutEditor({ cabinet, units }: LayoutEditorProps) {
   const removeSection = useDesigner((s) => s.removeSection)
   const moveSection = useDesigner((s) => s.moveSection)
   const updateSection = useDesigner((s) => s.updateSection)
+  const setBayRod = useDesigner((s) => s.setBayRod)
   const [selected, setSelected] = useState<{ sectionId: string; bayId: string } | null>(null)
 
   const sectionIndex = Math.max(0, cabinet.sections.findIndex((s) => s.id === selected?.sectionId))
@@ -97,6 +105,7 @@ export function LayoutEditor({ cabinet, units }: LayoutEditorProps) {
                     style={{ flexGrow: bayWeights[bi], flexBasis: 0 }}
                   >
                     <BayFace bay={b} />
+                    <RodMark bay={b} />
                   </button>
                 )
               })}
@@ -147,6 +156,24 @@ export function LayoutEditor({ cabinet, units }: LayoutEditorProps) {
         )}
         {bay.kind === 'door' && bay.doorCount === 1 && (
           <SelectField label={`${bayLabel} hinge side`} value={bay.hingeSide} options={HINGE_SIDES} onChange={(hingeSide) => patch({ hingeSide })} />
+        )}
+        {bay.kind !== 'drawer' && (
+          <div className="col-span-2">
+            <CheckboxField
+              label={`${bayLabel} hanging rod`}
+              isChecked={bay.rod !== undefined}
+              onChange={(on) => setBayRod(cabinet.id, section.id, bay.id, on ? { dropFromTop: DEFAULT_ROD_DROP } : null)}
+            />
+          </div>
+        )}
+        {bay.kind !== 'drawer' && bay.rod !== undefined && (
+          <LengthInput
+            label={`${bayLabel} rod drop from top`}
+            value={bay.rod.dropFromTop}
+            units={units}
+            {...ROD_DROP}
+            onCommit={(dropFromTop) => setBayRod(cabinet.id, section.id, bay.id, { dropFromTop })}
+          />
         )}
       </div>
       <div className="flex flex-wrap gap-1.5">

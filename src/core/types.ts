@@ -66,6 +66,8 @@ export interface LinearMaterial {
   /** Stock board length bought. */
   stockLength: Mm
   costPerMetre: number
+  /** Cross-section; absent = rectangular. Round stock (hanging rods) is `thickness` in diameter. */
+  profile?: 'rectangular' | 'round'
 }
 
 export type Material = SheetMaterial | LinearMaterial
@@ -81,6 +83,8 @@ export type HardwareKind =
   | 'leg'
   | 'screw'
   | 'other'
+  /** Hanging-rod end supports / flanges (`props.centre = 1`: centre support). */
+  | 'rod-support'
 
 export interface HardwareItem {
   id: Id
@@ -162,6 +166,8 @@ export interface ConstructionMethod {
     /** Rear clearance between drawer slide end and cabinet back. */
     rearClearance: Mm
   }
+  /** Linear stock hanging rods are cut from; absent = the default rod (`DEFAULT_ROD_MATERIAL_ID`). */
+  rodMaterialId?: Id
 }
 
 // ─── Cabinet ────────────────────────────────────────────────────────────────
@@ -176,8 +182,15 @@ export type CabinetType =
   | 'dresser'
   | 'vanity'
   | 'custom'
+  | 'wardrobe'
 
 export type BayKind = 'drawer' | 'door' | 'open'
+
+/** A hanging (wardrobe) rod across a door or open bay, cut from linear stock. */
+export interface HangingRod {
+  /** Rod centre below the top of the bay opening. */
+  dropFromTop: Mm
+}
 
 /** A horizontal band inside a section. Bays stack top to bottom. */
 export interface Bay {
@@ -191,6 +204,8 @@ export interface Bay {
   doorCount: 1 | 2
   /** Single-door bays: hinge side. */
   hingeSide: 'left' | 'right'
+  /** Door/open bays: a hanging rod; absent = none. Shelves in the bay sit above it. */
+  rod?: HangingRod
 }
 
 /** A vertical column inside the carcass. Sections are separated by dividers. */
@@ -370,6 +385,8 @@ export type PartGroup =
   | 'toe-kick'
   | 'top'
   | 'stretcher'
+  /** Hanging rods (round linear stock; bounds are diameter × diameter × length). */
+  | 'rod'
 
 export type Grain = 'length' | 'width' | 'none'
 

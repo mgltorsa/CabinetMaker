@@ -30,6 +30,7 @@ import {
   MIN_SHELF_PIN_SPACING,
   MIN_STEP_DOWN,
   MIN_TAB_SPACING,
+  ROD_DROP,
   SECTION_SIZE,
   TOOL_NUMBER,
 } from './limits'
@@ -90,6 +91,7 @@ const construction = obj<ConstructionMethod>({
     joinery: oneOf('none', 'dowel', 'domino', 'dado'),
     rearClearance: length,
   }),
+  rodMaterialId: optional(str),
 })
 
 const sectionSize = nullable(numIn(SECTION_SIZE))
@@ -101,6 +103,7 @@ const bay = obj<Bay>({
   shelfCount: numIn({ min: 0, max: MAX_SHELVES, integer: true }),
   doorCount: oneOf(1, 2),
   hingeSide: oneOf('left', 'right'),
+  rod: optional(obj({ dropFromTop: numIn(ROD_DROP) })),
 })
 
 const section = obj<Section>({ id: str, width: sectionSize, bays: arrayOf(bay, { min: 1, max: MAX_BAYS }) })
@@ -123,7 +126,7 @@ const cabinet = refine(
   obj<Cabinet>({
     id: str,
     name: str,
-    type: oneOf('base', 'wall', 'tall', 'drawer-bank', 'bookshelf', 'nightstand', 'dresser', 'vanity', 'custom'),
+    type: oneOf('base', 'wall', 'tall', 'drawer-bank', 'bookshelf', 'nightstand', 'dresser', 'vanity', 'custom', 'wardrobe'),
     width: cabinetDimension,
     height: cabinetDimension,
     depth: cabinetDimension,
@@ -162,6 +165,7 @@ const linearMaterial = obj<LinearMaterial>({
   width: size,
   stockLength: size,
   costPerMetre: nonNegative(),
+  profile: optional(oneOf('rectangular', 'round')),
 })
 
 const material: Check<Material> = (v, p) => {
@@ -172,7 +176,7 @@ const material: Check<Material> = (v, p) => {
 
 const hardwareItem = obj<HardwareItem>({
   id: str,
-  kind: oneOf('hinge', 'hinge-plate', 'slide', 'pull', 'shelf-pin', 'dowel', 'domino', 'leg', 'screw', 'other'),
+  kind: oneOf('hinge', 'hinge-plate', 'slide', 'pull', 'shelf-pin', 'dowel', 'domino', 'leg', 'screw', 'other', 'rod-support'),
   name: str,
   manufacturer: str,
   sku: str,

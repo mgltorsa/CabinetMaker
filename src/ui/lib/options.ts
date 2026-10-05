@@ -29,6 +29,7 @@ export const CABINET_TYPES = opts<CabinetType>([
   ['dresser', 'Dresser'],
   ['vanity', 'Vanity'],
   ['custom', 'Custom'],
+  ['wardrobe', 'Wardrobe'],
 ])
 export const STYLES = opts<ConstructionStyle>([
   ['frameless-overlay', 'Frameless, full overlay'],
@@ -85,8 +86,16 @@ export function slideMountOptions(project: Project, current: SlideMount): Select
   ]
 }
 
+/** Sheet stock, or rectangular linear stock (round rod stock is offered by `rodMaterialOptions`). */
 export function materialOptions(project: Project, kind: 'sheet' | 'linear'): SelectOption<string>[] {
-  return project.materials.filter((m) => m.kind === kind).map((m) => ({ value: m.id, label: m.name }))
+  return project.materials
+    .filter((m) => m.kind === kind && !(m.kind === 'linear' && m.profile === 'round'))
+    .map((m) => ({ value: m.id, label: m.name }))
+}
+
+/** Round linear stock that hanging rods can be cut from. */
+export function rodMaterialOptions(project: Project): SelectOption<string>[] {
+  return project.materials.filter((m) => m.kind === 'linear' && m.profile === 'round').map((m) => ({ value: m.id, label: m.name }))
 }
 
 const hardwareOption = (h: HardwareItem): SelectOption<string> => ({ value: h.id, label: `${h.name} (${h.manufacturer} ${h.sku})` })

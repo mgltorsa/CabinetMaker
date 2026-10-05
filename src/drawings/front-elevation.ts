@@ -47,6 +47,25 @@ export function synthesizedTop(cabinet: Cabinet, parts: readonly Part[]): Part |
   }
 }
 
+/**
+ * Hanging rods: hidden (dashed) where a front covers them, solid in open bays.
+ * Drawn after the fronts so the door fill does not hide the dashed outline.
+ */
+function rodShapes(parts: readonly Part[], fronts: readonly Part[]): Shape[] {
+  /** Length of the rod's centreline hidden by front `f` (pairs of doors leave a reveal between them). */
+  const covered = (f: Range2, r: Range2): Mm => {
+    const y = (r.y0 + r.y1) / 2
+    return y >= f.y0 && y <= f.y1 ? Math.max(0, Math.min(f.x1, r.x1) - Math.max(f.x0, r.x0)) : 0
+  }
+  return parts
+    .filter((p) => p.group === 'rod')
+    .map((rod) => {
+      const r = xy(rod)
+      const hidden = fronts.reduce((n, f) => n + covered(xy(f), r), 0)
+      return rect(r, hidden >= (r.x1 - r.x0) / 2 ? 'hidden' : 'outline')
+    })
+}
+
 function doorSwing(part: Part, cabinet: Cabinet): Shape[] {
   const r = xy(part)
   const midY = (r.y0 + r.y1) / 2
@@ -148,6 +167,7 @@ function frontShapes(cabinet: Cabinet, parts: readonly Part[], units: UnitSystem
     if (isDoor(f)) shapes.push(...doorSwing(f, cabinet))
     shapes.push(...pullMarks(f, cabinet, style))
   })
+  shapes.push(...rodShapes(parts, fronts))
 
   const kick = toeKickHeight(cabinet, parts)
   // Primary dims state the cabinet box as entered; projections get an "overall" dim.

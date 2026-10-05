@@ -3,7 +3,7 @@
  *
  * Rule order per cabinet: materials → dims (feasibility) → layout (sections,
  * bays, fronts) → carcass → back → toe kick → face frame → doors → drawers →
- * shelves → top. Rules return parts plus ops placed in cabinet space; ops are
+ * shelves → rods → top. Rules return parts plus ops placed in cabinet space; ops are
  * attached (panel space, deterministic ids) at the end. Impossible inputs
  * produce `BuildWarning`s, never exceptions.
  *
@@ -25,6 +25,7 @@ import { aggregateHardware } from './hardware'
 import { resolveFasteners } from './joinery'
 import { computeLayout } from './layout'
 import { attachOps } from './ops'
+import { buildRods } from './rods'
 import { buildShelves } from './shelves'
 import { buildToeKick } from './toeKick'
 import { buildTop } from './top'
@@ -68,6 +69,7 @@ function buildCabinetUnsafe(cabinet: Cabinet, ctx: EngineContext): CabinetBuild 
     buildDoors(bctx, carcass.units),
     buildDrawers(bctx, carcass.units, fasteners),
     buildShelves(bctx, carcass.units),
+    buildRods(bctx),
   )
   const fronts = body.parts.filter((p) => p.group === 'front')
   const frontFaceZ = fronts.length > 0 ? Math.max(...fronts.map((p) => p.bounds.max.z)) : dimsResult.dims.D + dimsResult.dims.fft

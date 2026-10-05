@@ -13,6 +13,21 @@ describe('presetIcon', () => {
     }
   })
 
+  it('draws the wardrobe rod as a line inside the outline, under its upper shelf', () => {
+    const icon = presetIcon('wardrobe')
+    expect(icon.rods).toHaveLength(1)
+    const [rod] = icon.rods
+    expect(rod!.x1).toBeGreaterThan(0)
+    expect(rod!.x2).toBeLessThan(icon.width)
+    expect(rod!.x2 - rod!.x1).toBeGreaterThan(icon.width * 0.8)
+    expect(rod!.y).toBeGreaterThan(0)
+    expect(rod!.y).toBeLessThan(icon.height * 0.3)
+  })
+
+  it('draws no rod for presets without one', () => {
+    expect(presetIcon('tall').rods).toEqual([])
+  })
+
   it('gives the wall cabinet its two doors', () => {
     expect(presetIcon('wall').fronts).toHaveLength(2)
   })

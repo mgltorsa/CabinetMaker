@@ -21,6 +21,7 @@ export const GROUP_ORDER: readonly PartGroup[] = [
   'face-frame',
   'front',
   'drawer-box',
+  'rod',
 ]
 
 const nameCollator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' })

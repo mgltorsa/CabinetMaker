@@ -45,3 +45,6 @@ export const MAX_SHELF_PIN_DIAMETER: Mm = 12
 /** Tabs: spacing bounded below and width above, so spacing > width always holds. */
 export const MIN_TAB_SPACING: Mm = 50
 export const MAX_TAB_WIDTH: Mm = 40
+
+/** Hanging-rod drop below the bay top (rod centre). */
+export const ROD_DROP: Bounds = { min: 1, max: 3000 }

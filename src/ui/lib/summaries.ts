@@ -57,6 +57,19 @@ export function shelvesSummary(cab: Cabinet): string {
   return n === 0 ? 'None' : plural(n, 'shelf', 'shelves')
 }
 
+/** Hanging rods (door and open bays only; the engine ignores a rod on a drawer bay). */
+export function rodCount(cab: Cabinet): number {
+  return cab.sections.flatMap((s) => s.bays).filter((b) => b.kind !== 'drawer' && b.rod !== undefined).length
+}
+
+/** Shelves card summary: shelves, plus hanging rods when there are any. */
+export function shelvesAndRodsSummary(cab: Cabinet): string {
+  const rods = rodCount(cab)
+  if (rods === 0) return shelvesSummary(cab)
+  const rodText = plural(rods, 'rod')
+  return shelfCount(cab) === 0 ? rodText : `${shelvesSummary(cab)} · ${rodText}`
+}
+
 export function drawersSummary(cab: Cabinet, hardware: readonly HardwareItem[]): string {
   const n = drawerCount(cab)
   if (n === 0) return 'None'

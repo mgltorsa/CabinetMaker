@@ -10,10 +10,16 @@ import { makeDrawing } from './bounds'
 import { synthesizedTop } from './front-elevation'
 import { project, union } from './part-geometry'
 import { floorLine, horizontalDims, mountingNote, verticalDims } from './envelope-dims'
-import { rect, type Range2 } from './shapes'
+import { circle, rect, type Range2 } from './shapes'
 import { FILL_SECTION, type DrawingStyle } from './style'
 
 const zy = (p: Part): Range2 => project(p, 'z', 'y')
+
+/** Hanging rods are round: drawn as their cross-section circle, not their bounding box. */
+function rodCircle(p: Part): Shape {
+  const r = zy(p)
+  return circle((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2, Math.min(r.x1 - r.x0, r.y1 - r.y0) / 2, 'outline')
+}
 
 function isSidePanel(p: Part): boolean {
   return (p.group === 'carcass' || p.group === 'divider') && p.axes.thickness === 'x'
@@ -21,7 +27,8 @@ function isSidePanel(p: Part): boolean {
 
 function sideShapes(cabinet: Cabinet, parts: readonly Part[], cutX: Mm, units: UnitSystem, style: DrawingStyle, fallback: Range2): Shape[] {
   const sides = parts.filter(isSidePanel)
-  const rest = parts.filter((p) => !isSidePanel(p))
+  const rods = parts.filter((p) => p.group === 'rod')
+  const rest = parts.filter((p) => !isSidePanel(p) && p.group !== 'rod')
   const box = union(parts.map(zy)) ?? fallback
   const gap = style.dimSpacing
   const fmt = (v: Mm): string => formatLength(v, units)
@@ -30,6 +37,7 @@ function sideShapes(cabinet: Cabinet, parts: readonly Part[], cutX: Mm, units: U
     ...floorLine(cabinet.floorHeight, box.x0 - gap, box.x1 + gap),
     ...sides.map((p) => rect(zy(p), 'outline')),
     ...rest.map((p) => (isCut(p) ? rect(zy(p), 'outline', FILL_SECTION) : rect(zy(p), 'outline'))),
+    ...rods.map(rodCircle),
   ]
   const sideBox = union(sides.map(zy))
   if (sideBox) shapes.push(rect(sideBox, 'outline'))

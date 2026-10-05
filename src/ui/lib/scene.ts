@@ -7,7 +7,7 @@
  * Every cabinet's back sits on the wall plane (cabinet space z = 0).
  */
 import { panelToCabinet } from '@/core/panel'
-import type { Cabinet, HoleOp, Part, PartGroup, ProjectBuild, SignedAxis, UnitSystem } from '@/core/types'
+import type { Axis, Cabinet, HoleOp, Part, PartGroup, ProjectBuild, SignedAxis, UnitSystem } from '@/core/types'
 import { formatLength } from '@/core/units'
 import { synthesizedTop } from '@/drawings/front-elevation'
 import { hingeSide } from '@/drawings/part-geometry'
@@ -29,7 +29,7 @@ const DIM_OVERSHOOT_MM = 25
 export type Vec3Tuple = [number, number, number]
 
 /** Surface finish, mapped to a material by the viewer. */
-export type Finish = 'carcass' | 'front' | 'back' | 'drawer-box' | 'toe-kick' | 'top' | 'face-frame'
+export type Finish = 'carcass' | 'front' | 'back' | 'drawer-box' | 'toe-kick' | 'top' | 'face-frame' | 'rod'
 
 const FINISH: Record<PartGroup, Finish> = {
   carcass: 'carcass',
@@ -42,6 +42,7 @@ const FINISH: Record<PartGroup, Finish> = {
   'toe-kick': 'toe-kick',
   top: 'top',
   'face-frame': 'face-frame',
+  rod: 'rod',
 }
 
 export interface MeshSpec {
@@ -54,6 +55,15 @@ export interface MeshSpec {
   /** Rotation about +Y, radians (open doors). */
   rotationY: number
   finish: Finish
+  /** Round parts (hanging rods): drawn as a cylinder along `axis`, with supports at both ends. */
+  rod?: RodSpec
+}
+
+/** Cylinder of a hanging rod, metres; centred on the mesh `position`. */
+export interface RodSpec {
+  axis: Axis
+  radius: number
+  length: number
 }
 
 /** A bar pull between two holes on a front's show face. */
@@ -199,6 +209,11 @@ function partMotion(part: Part, cabinet: Cabinet | undefined, view: ViewToggles)
 
 // ─── Scene ──────────────────────────────────────────────────────────────────
 
+/** Rod parts are diameter × diameter × length boxes; the cylinder runs along the length axis. */
+function rodSpec(part: Part): RodSpec {
+  return { axis: part.axes.length, radius: Math.min(part.width, part.thickness) / 2 / MM_PER_M, length: part.length / MM_PER_M }
+}
+
 const holesFor = (part: Part, purpose: HoleOp['purpose']): HoleOp[] =>
   part.ops.filter((o): o is HoleOp => o.kind === 'hole' && o.purpose === purpose && o.face === 'A')
 
@@ -244,7 +259,7 @@ export function buildScene(build: ProjectBuild, cabinets: readonly Cabinet[], vi
 
   const meshes = placed.map(({ part, motion, centre }): MeshSpec => {
     const { min, max } = part.bounds
-    return {
+    const mesh: MeshSpec = {
       partId: part.id,
       cabinetId: part.cabinetId,
       position: m(centre),
@@ -252,6 +267,7 @@ export function buildScene(build: ProjectBuild, cabinets: readonly Cabinet[], vi
       rotationY: motion.angle,
       finish: FINISH[part.group],
     }
+    return part.group === 'rod' ? { ...mesh, rod: rodSpec(part) } : mesh
   })
 
   const pulls: PullSpec[] = []

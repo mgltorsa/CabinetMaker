@@ -7,14 +7,17 @@
  * from the carcass interior bottom. With `system32` the rows run the full bay
  * height; otherwise only the holes under each shelf are drilled.
  * Shelves are spread evenly and snapped onto the nearest grid hole.
+ * In a bay with a hanging rod the shelves stay above it: the lowest rests
+ * just clear of the rod (`rodShelfFloor`), the rest spread evenly above.
  */
 import type { BuildWarning, Mm } from '@/core/types'
 import { MIN_PART_SIZE, PIN_ROW_END_MARGIN, SHELF_FRONT_SETBACK, SHELF_SIDE_CLEARANCE } from './constants'
 import { emptyResult, mergeResults, warning, type BuildContext, type HardwareNeed, type RuleResult } from './context'
 import { findHardware } from './hardware'
-import { boxOf, makePart, span, spanSize } from './geometry'
+import { boxOf, makePart, span, spanSize, type Span } from './geometry'
 import type { BayLayout } from './layout'
 import { panelHoles, type SectionUnit } from './panelHoles'
+import { rodShelfFloor } from './rods'
 
 const PINS_PER_SHELF = 4
 
@@ -54,9 +57,15 @@ function bayShelves(ctx: BuildContext, b: BayLayout, unit: SectionUnit): RuleRes
   const x = span(layout.clearX.lo + SHELF_SIDE_CLEARANCE, layout.clearX.hi - SHELF_SIDE_CLEARANCE)
   const z = span(d.rearLimitZ, d.interiorFrontZ - SHELF_FRONT_SETBACK)
   const grid = gridHoles(d.interiorY.lo, pins.spacing, b.openingY.lo + PIN_ROW_END_MARGIN, b.openingY.hi - PIN_ROW_END_MARGIN)
-  const holes = shelfHoles(b.openingY, b.bay.shelfCount, t, support, pins.spacing > 0 ? grid : [])
+  const floor = rodShelfFloor(b)
+  const usable = floor === null ? grid : grid.filter((g) => g + support >= floor)
+  const holes = shelfHoles(shelfZone(b.openingY, floor, b.bay.shelfCount, t), b.bay.shelfCount, t, support, pins.spacing > 0 ? usable : [])
   if (holes.length === 0 || spanSize(x) < MIN_PART_SIZE || spanSize(z) < MIN_PART_SIZE) {
-    return { ...emptyResult(), warnings: [warning(cabinet.id, 'warn', 'shelves-dont-fit', `${label}: ${b.bay.shelfCount} shelves do not fit; omitted`)] }
+    const warn =
+      floor === null
+        ? warning(cabinet.id, 'warn', 'shelves-dont-fit', `${label}: ${b.bay.shelfCount} shelves do not fit; omitted`)
+        : warning(cabinet.id, 'warn', 'shelves-in-hanging-space', `${label}: ${b.bay.shelfCount} shelves do not fit above the hanging rod (they would sit in its hanging space); omitted. Lower the rod or remove shelves`)
+    return { ...emptyResult(), warnings: [warn] }
   }
   const parts = holes.map((h, k) =>
     makePart({
@@ -80,6 +89,17 @@ function bayShelves(ctx: BuildContext, b: BayLayout, unit: SectionUnit): RuleRes
   const hardware: HardwareNeed[] = pin ? [{ hardwareId: pin.id, qty: PINS_PER_SHELF * parts.length, note: 'Shelf pins' }] : []
   const warnings: BuildWarning[] = pin ? [] : [warning(cabinet.id, 'warn', 'unknown-hardware', `Shelf pin ${cabinet.hardware.shelfPinId} is not in the catalog`)]
   return { parts, ops, hardware, warnings }
+}
+
+/**
+ * Span `shelfHoles` spreads `count` shelves over. Without a rod: the opening.
+ * With one: chosen so the lowest shelf's underside lands on `floor` and the
+ * others are spread evenly above it (equal gaps up to the opening top).
+ */
+function shelfZone(opening: Span, floor: Mm | null, count: number, t: Mm): Span {
+  if (floor === null || count <= 0) return opening
+  const lowestCentre = floor + t / 2
+  return span((lowestCentre * (count + 1) - opening.hi) / count, opening.hi)
 }
 
 /** Front and rear row z; a single middle row when the cabinet is too shallow for two. */

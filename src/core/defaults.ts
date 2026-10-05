@@ -25,7 +25,12 @@ export const DEFAULT_MATERIALS: Material[] = [
   { kind: 'sheet', id: 'bb-12', name: '12 mm Baltic birch 4×8 (drawer boxes)', thickness: 12, sheetLength: 2440, sheetWidth: 1220, grained: true, costPerSheet: 95 },
   { kind: 'sheet', id: 'mdf-18', name: '18 mm MDF (paint-grade fronts)', thickness: 18, sheetLength: 2440, sheetWidth: 1220, grained: false, costPerSheet: 55 },
   { kind: 'linear', id: 'maple-19x63', name: 'Maple 19 × 63 mm (face frames)', thickness: 19, width: 63, stockLength: 2440, costPerMetre: 12 },
+  // Round tube: thickness = width = diameter. Sold in 3 m lengths; price is a placeholder.
+  { kind: 'linear', id: 'rod-25-chrome', name: 'Wardrobe rod Ø25 chrome', thickness: 25, width: 25, stockLength: 3000, costPerMetre: 6, profile: 'round' },
 ]
+
+/** Hanging rods are cut from this material unless `construction.rodMaterialId` says otherwise. */
+export const DEFAULT_ROD_MATERIAL_ID = 'rod-25-chrome'
 
 /*
  * Slide props: `length` = nominal slide length (mm, = drawer-box length);
@@ -73,6 +78,9 @@ export const DEFAULT_HARDWARE: HardwareItem[] = [
   { id: 'pin-5', kind: 'shelf-pin', name: 'Shelf pin 5 mm', manufacturer: 'Generic', sku: 'PIN-5', unitCost: 0.15, props: { diameter: 5 } },
   { id: 'dowel-8x30', kind: 'dowel', name: 'Dowel 8 × 30 mm', manufacturer: 'Generic', sku: 'DOWEL-8x30', unitCost: 0.05, props: { diameter: 8, length: 30 } },
   { id: 'domino-5x30', kind: 'domino', name: 'Domino tenon 5 × 30 mm', manufacturer: 'Festool', sku: '494938', unitCost: 0.12, props: { thickness: 5, length: 30 } },
+  // Example SKUs for generic Ø25 rod supports: verify fit and load rating with the supplier.
+  { id: 'rod-end-25', kind: 'rod-support', name: 'Rod end support Ø25 (flange)', manufacturer: 'Generic', sku: 'ROD-END-25', unitCost: 1.2, props: { diameter: 25 } },
+  { id: 'rod-centre-25', kind: 'rod-support', name: 'Rod centre support Ø25', manufacturer: 'Generic', sku: 'ROD-CTR-25', unitCost: 2.5, props: { diameter: 25, centre: 1 } },
 ]
 
 export const DEFAULT_TOOLS: Tool[] = [
