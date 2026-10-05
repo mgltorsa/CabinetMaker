@@ -2,6 +2,7 @@
 
 import {
   AlertTriangleIcon,
+  BoxIcon,
   ChevronDownIcon,
   CopyIcon,
   FileDownIcon,
@@ -199,6 +200,9 @@ export function TopBar({ project, warnings, pipelineError, exports }: TopBarProp
           <DropdownMenuSeparator />
           <DropdownMenuItem disabled={exports.isPdfBusy} onSelect={() => void exports.downloadPdf()}>
             <FileTextIcon /> {exports.isPdfBusy ? 'Building PDF…' : 'Download plan book (PDF)'}
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={exports.isBlenderBusy} onSelect={() => void exports.downloadBlenderBundle()}>
+            <BoxIcon /> {exports.isBlenderBusy ? 'Building Blender bundle…' : 'Download Blender bundle (.zip)'}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuLabel>Units</DropdownMenuLabel>

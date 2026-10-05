@@ -1,6 +1,7 @@
 'use client'
 
 import { DownloadIcon, FileTextIcon, Loader2Icon } from 'lucide-react'
+import { BoxIcon } from 'lucide-react'
 import type { EstimateSettings, Project } from '@/core/types'
 import type { PipelineResult } from '@/pipeline'
 import { money, percent } from '../../lib/format'
@@ -111,6 +112,17 @@ export function OutputsSection({ project, result, exports }: OutputsSectionProps
         <Button size="sm" onClick={() => void exports.downloadPdf()} disabled={exports.isPdfBusy} aria-busy={exports.isPdfBusy}>
           {exports.isPdfBusy ? <Loader2Icon className="animate-spin" /> : <FileTextIcon />}
           {exports.isPdfBusy ? 'Building PDF…' : 'Download PDF'}
+        </Button>
+      </SpecCard>
+
+      <SpecCard index="03·5" title="Blender / Home Builder" summary={`${project.cabinets.length} cabinet${project.cabinets.length === 1 ? '' : 's'} · GLB + import script`}>
+        <p className="text-xs text-muted-foreground">
+          One glTF model per cabinet (closed, in metres, one object per part) with thumbnails, a manifest and a Blender 4.x script that turns them into an asset
+          library for Home Builder 5. See README.txt in the zip.
+        </p>
+        <Button size="sm" variant="outline" onClick={() => void exports.downloadBlenderBundle()} disabled={exports.isBlenderBusy} aria-busy={exports.isBlenderBusy}>
+          {exports.isBlenderBusy ? <Loader2Icon className="animate-spin" /> : <BoxIcon />}
+          {exports.isBlenderBusy ? 'Building bundle…' : 'Download Blender bundle (.zip)'}
         </Button>
       </SpecCard>
     </div>
