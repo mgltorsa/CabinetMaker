@@ -93,12 +93,16 @@ export interface SceneSpec {
   target: Vec3Tuple
   /** Where the camera should frame: the selected cabinet (or the whole run). */
   focus: { target: Vec3Tuple; size: number }
+  /** Room-space X (mm) at scene x = 0; room and models render with the same shift. */
+  centreX: number
 }
 
 export interface SceneOptions {
   units: UnitSystem
   /** Cabinet that gets dimension lines. */
   selectedCabinetId: string | null
+  /** Room-space X (mm) to centre on instead of the run (room view: keeps the scene still while cabinets change). */
+  centreX?: number
 }
 
 // ─── Part classification ────────────────────────────────────────────────────
@@ -129,16 +133,30 @@ export function isPartVisible(part: Part, view: ViewToggles): boolean {
 
 // ─── Layout ─────────────────────────────────────────────────────────────────
 
-/** X offset of each cabinet: floor cabinets in one run, wall cabinets above from the same start. */
+/**
+ * X offset of each cabinet: floor cabinets in one run, wall cabinets above from
+ * the same start. A cabinet with a free `placement.position` sits there instead
+ * and leaves the run (the others close up).
+ */
 export function runOffsets(cabinets: readonly Cabinet[]): Map<string, number> {
   const offsets = new Map<string, number>()
   const cursor = { floor: 0, wall: 0 }
   for (const cab of cabinets) {
+    const position = cab.placement?.position
+    if (position) {
+      offsets.set(cab.id, position.x)
+      continue
+    }
     const run = cab.type === 'wall' ? 'wall' : 'floor'
     offsets.set(cab.id, cursor[run])
     cursor[run] += cab.width + RUN_GAP_MM
   }
   return offsets
+}
+
+/** Z offset of each cabinet: its free placement, else 0 (back on the back-wall plane). */
+export function depthOffsets(cabinets: readonly Cabinet[]): Map<string, number> {
+  return new Map(cabinets.map((c) => [c.id, c.placement?.position?.z ?? 0]))
 }
 
 // ─── Vector helpers (mm) ────────────────────────────────────────────────────
@@ -214,10 +232,13 @@ export function buildScene(build: ProjectBuild, cabinets: readonly Cabinet[], vi
     return top ? [top] : []
   })
   const visible = [...build.parts, ...supplied].filter((p) => isPartVisible(p, view))
-  if (visible.length === 0) return { meshes: [], pulls: [], pinHoles: [], dimensions: [], extent: 1, target: [0, 0.4, 0], focus: { target: [0, 0.4, 0], size: 1 } }
+  if (visible.length === 0) {
+    return { meshes: [], pulls: [], pinHoles: [], dimensions: [], extent: 1, target: [0, 0.4, 0], focus: { target: [0, 0.4, 0], size: 1 }, centreX: options.centreX ?? 0 }
+  }
 
-  // World (mm) before centring: cabinet space + run offset.
-  const toWorld = (part: Part, p: V): V => ({ x: p.x + (offsets.get(part.cabinetId) ?? 0), y: p.y, z: p.z })
+  const depths = depthOffsets(cabinets)
+  // World (mm) before centring: cabinet space + run offset (room space).
+  const toWorld = (part: Part, p: V): V => ({ x: p.x + (offsets.get(part.cabinetId) ?? 0), y: p.y, z: p.z + (depths.get(part.cabinetId) ?? 0) })
 
   const placed = visible.map((part) => {
     const motion = partMotion(part, cabinetById.get(part.cabinetId), view)
@@ -232,12 +253,12 @@ export function buildScene(build: ProjectBuild, cabinets: readonly Cabinet[], vi
   // Run extents (unrotated bounds are close enough for framing).
   const xs = visible.flatMap((p) => [p.bounds.min.x + (offsets.get(p.cabinetId) ?? 0), p.bounds.max.x + (offsets.get(p.cabinetId) ?? 0)])
   const ys = visible.flatMap((p) => [p.bounds.min.y, p.bounds.max.y])
-  const zs = visible.flatMap((p) => [p.bounds.min.z, p.bounds.max.z])
+  const zs = visible.flatMap((p) => [p.bounds.min.z, p.bounds.max.z].map((z) => z + (depths.get(p.cabinetId) ?? 0)))
   const minX = Math.min(...xs)
   const maxX = Math.max(...xs)
   const maxY = Math.max(...ys)
   const maxZ = Math.max(...zs)
-  const cx = (minX + maxX) / 2
+  const cx = options.centreX ?? (minX + maxX) / 2
   const m = (p: V): Vec3Tuple => [(p.x - cx) / MM_PER_M, p.y / MM_PER_M, p.z / MM_PER_M]
   // `|| 0` folds -0 (from negated axes) into 0.
   const dir = (v: V): Vec3Tuple => [v.x || 0, v.y || 0, v.z || 0]
@@ -278,7 +299,9 @@ export function buildScene(build: ProjectBuild, cabinets: readonly Cabinet[], vi
     }
   }
 
-  const dimensions = view.dimensions ? cabinetDimensions(build, cabinets, offsets, options, m) : []
+  // Dimension lines are laid out in run space; shift them to the selected cabinet's free Z.
+  const selectedDz = depths.get(options.selectedCabinetId ?? '') ?? 0
+  const dimensions = view.dimensions ? cabinetDimensions(build, cabinets, offsets, options, (p) => m({ ...p, z: p.z + selectedDz })) : []
   const extent = Math.max(maxX - minX, maxY, maxZ) / MM_PER_M
   const target: Vec3Tuple = [0, maxY / 2 / MM_PER_M, maxZ / 2 / MM_PER_M]
   const selected = cabinetById.get(options.selectedCabinetId ?? '')
@@ -287,12 +310,12 @@ export function buildScene(build: ProjectBuild, cabinets: readonly Cabinet[], vi
         target: m({
           x: (offsets.get(selected.id) ?? 0) + selected.width / 2,
           y: selected.floorHeight + selected.height / 2,
-          z: selected.depth / 2,
+          z: (depths.get(selected.id) ?? 0) + selected.depth / 2,
         }),
         size: Math.max(selected.width, selected.height, selected.depth) / MM_PER_M,
       }
     : { target, size: extent }
-  return { meshes, pulls, pinHoles, dimensions, extent, target, focus }
+  return { meshes, pulls, pinHoles, dimensions, extent, target, focus, centreX: cx }
 }
 
 /** Overall W / H / D of the selected cabinet: width over the top front edge, height and depth at the right. */

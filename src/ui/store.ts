@@ -40,6 +40,10 @@ export interface ViewToggles {
   /** Slide drawers (box and face) out along +Z. */
   drawersOpen: boolean
   back: boolean
+  /** Room shell (walls, floor) when the project has a room. */
+  room: boolean
+  /** Imported 3D models. */
+  models: boolean
 }
 
 export type ViewToggle = keyof ViewToggles
@@ -53,10 +57,12 @@ export const DEFAULT_VIEW: ViewToggles = {
   drawers: true,
   drawersOpen: false,
   back: true,
+  room: true,
+  models: true,
 }
 
 /** The numbered sidebar sections; each drives what the main area shows. */
-export type WorkspaceSection = 'design' | 'build' | 'outputs' | 'cam'
+export type WorkspaceSection = 'design' | 'build' | 'outputs' | 'cam' | 'models'
 /** Main-area views while designing (sections 01 and 02). */
 export type ModelView = '3d' | 'front' | 'side' | 'joinery'
 /** Main-area views for section 03 "Drawings & BOM". */
@@ -102,6 +108,9 @@ export interface DesignerActions {
   updateNest: (patch: Partial<NestSettings>) => void
   updateEstimate: (patch: Partial<Omit<EstimateSettings, 'labor'>>) => void
   updateLabor: (patch: Partial<EstimateSettings['labor']>) => void
+
+  /** Apply a pure project edit (room, models and placement ops in `models/modelOps`). */
+  editProject: (fn: (project: Project) => Project) => void
 }
 
 export interface DesignerState extends DesignerActions {
@@ -194,6 +203,8 @@ export function createDesignerStore(initial: Project = createProject()): Designe
       updateNest: (patch) => edit((p) => ops.updateNest(p, patch)),
       updateEstimate: (patch) => edit((p) => ops.updateEstimate(p, patch)),
       updateLabor: (patch) => edit((p) => ops.updateLabor(p, patch)),
+
+      editProject: (fn) => edit(fn),
     }
   })
 }

@@ -5,6 +5,7 @@ import { Canvas, type ThreeEvent, useThree } from '@react-three/fiber'
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { CanvasTexture, type InstancedMesh, Object3D, Quaternion, RepeatWrapping, SRGBColorSpace, Vector3 } from 'three'
 import type { DimensionSpec, Finish, MeshSpec, PinHoleSpec, PullSpec, SceneSpec } from '../lib/scene'
+import { SceneExtras, type SceneExtrasProps } from '../models/SceneExtras'
 
 /** Camera distance as a multiple of the scene's largest extent. */
 const CAMERA_DISTANCE = 3.1
@@ -221,10 +222,12 @@ export type Viewer3DProps = {
   hoveredPartId: string | null
   onHover: (partId: string | null) => void
   onPick: (cabinetId: string) => void
+  /** Room shell and imported models (sidebar 05). */
+  extras?: SceneExtrasProps
 }
 
 /** WebGL view; loaded client-side only (see ThreeView). */
-export default function Viewer3D({ scene, focusKey, hoveredPartId, onHover, onPick }: Viewer3DProps) {
+export default function Viewer3D({ scene, focusKey, hoveredPartId, onHover, onPick, extras }: Viewer3DProps) {
   const floorSize = Math.max(8, Math.ceil(scene.extent * 6))
   const floorTexture = useFloorTexture(floorSize / 1.6)
   const [tx, ty, tz] = scene.focus.target
@@ -263,10 +266,14 @@ export default function Viewer3D({ scene, focusKey, hoveredPartId, onHover, onPi
           <planeGeometry args={[floorSize, floorSize]} />
           <meshStandardMaterial map={floorTexture} color={floorTexture ? '#ffffff' : '#c9ab7c'} roughness={0.8} />
         </mesh>
-        <mesh position={[0, 1.6, -0.002]} receiveShadow>
-          <planeGeometry args={[floorSize, 3.2]} />
-          <meshStandardMaterial color="#ebe6de" roughness={0.95} />
-        </mesh>
+        {/* A built room replaces the default back wall. */}
+        {!extras?.room && (
+          <mesh position={[0, 1.6, -0.002]} receiveShadow>
+            <planeGeometry args={[floorSize, 3.2]} />
+            <meshStandardMaterial color="#ebe6de" roughness={0.95} />
+          </mesh>
+        )}
+        {extras && <SceneExtras {...extras} />}
 
         {scene.meshes.map((m) => (
           <PartMesh key={m.partId} mesh={m} isHovered={m.partId === hoveredPartId} onHover={onHover} onPick={onPick} />

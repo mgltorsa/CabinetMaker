@@ -45,3 +45,26 @@ export const MAX_SHELF_PIN_DIAMETER: Mm = 12
 /** Tabs: spacing bounded below and width above, so spacing > width always holds. */
 export const MIN_TAB_SPACING: Mm = 50
 export const MAX_TAB_WIDTH: Mm = 40
+
+// ─── Room & imported models (phase 6) ───────────────────────────────────────
+
+/** Imported models per project. */
+export const MAX_MODELS = 50
+/** Largest model file accepted (bytes). Bigger files stall parsing on the main thread. */
+export const MAX_MODEL_BYTES = 50 * 1024 * 1024
+/** Largest project .zip bundle, and the most it may inflate to (zip-bomb guard). */
+export const MAX_BUNDLE_BYTES = 250 * 1024 * 1024
+/** Largest `project.json` inside a bundle. */
+export const MAX_PROJECT_JSON_BYTES = 10 * 1024 * 1024
+/** Room-space coordinate of a placed model or cabinet (mm). */
+export const ROOM_COORD: Bounds = { min: -20_000, max: 20_000 }
+/** Lift of a model above the floor (mm). */
+export const MODEL_LIFT: Bounds = { min: -5000, max: 5000 }
+/** Uniform model scale on top of the unit conversion. */
+export const MODEL_SCALE: Bounds = { min: 0.01, max: 100 }
+/** Model bounding-box size in its own units; zero allowed for flat models. */
+export const MODEL_NATIVE_SIZE: Bounds = { min: 0, max: 1e7 }
+/** Rectangular room builder (mm). */
+export const ROOM_SIZE: Bounds = { min: 500, max: MAX_LENGTH }
+export const ROOM_HEIGHT: Bounds = { min: 1000, max: 6000 }
+export const WALL_THICKNESS: Bounds = { min: 10, max: 1000 }

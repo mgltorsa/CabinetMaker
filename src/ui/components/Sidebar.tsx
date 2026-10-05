@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { Project } from '@/core/types'
 import type { PipelineResult } from '@/pipeline'
 import { CamSection } from '../cam/MachineSettings'
+import { ModelsSection } from '../models/panel/ModelsSection'
 import { selectedCabinet, useDesigner, type WorkspaceSection } from '../store'
 import type { Exports } from '../useExports'
 import { PresetPicker } from './PresetPicker'
@@ -18,6 +19,7 @@ const SECTIONS: { value: WorkspaceSection; number: string; title: string }[] = [
   { value: 'build', number: '02', title: 'Build Options' },
   { value: 'outputs', number: '03', title: 'Drawings & BOM' },
   { value: 'cam', number: '04', title: 'CAM / CNC' },
+  { value: 'models', number: '05', title: 'Room & Models' },
 ]
 
 type SidebarProps = { project: Project; result: PipelineResult; exports: Exports }
@@ -60,6 +62,7 @@ export function Sidebar({ project, result, exports }: SidebarProps) {
                   {s.value === 'build' && <BuildSection cabinet={cabinet} project={project} />}
                   {s.value === 'outputs' && <OutputsSection project={project} result={result} exports={exports} />}
                   {s.value === 'cam' && <CamSection machine={project.machine} tools={project.tools} units={project.units} />}
+                  {s.value === 'models' && <ModelsSection project={project} />}
                 </AccordionContent>
               </AccordionItem>
             ))}
