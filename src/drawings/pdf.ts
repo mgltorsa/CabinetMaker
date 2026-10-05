@@ -1,25 +1,25 @@
 /**
  * Multi-page plan book rendered with pdf-lib from the same `Drawing` model as
  * the screen. Pages come from `buildPagePlan`; `planPageCount` is that plan's
- * length, so the page count is known without rendering.
+ * length, so the page count is known without rendering. Title block, cover,
+ * branding, watermark, sections and page size follow `project.pdf`.
  */
 import { PDFDocument, StandardFonts, type PDFPage } from 'pdf-lib'
-import type { Project } from '@/core/types'
+import { pdfDisplayTitle, resolvePdfSettings, titleBlockDate } from '@/core/pdf-settings'
+import type { PdfSettings, Project } from '@/core/types'
 import type { PipelineResult } from '@/pipeline'
 import { drawDrawing, fitScale, scaleNote, type PdfFonts } from './pdf-drawing'
 import { cellDrawingFrame, contentFrame, gridCells, PT_PER_MM, type PageSize } from './pdf-layout'
-import { drawCoverPage, drawEstimatePage, drawFrameAndTitleBlock, drawTablePage } from './pdf-pages'
+import { embedBrandImages } from './pdf-brand'
+import { drawCoverPage, drawEstimatePage, drawFrameAndTitleBlock, drawTablePage, type CoverBrand } from './pdf-pages'
 import { buildPagePlan, pageSizeOf, type DrawingsPage, type PlanOptions, type PlanPage } from './pdf-plan'
 import { fitWidth } from './pdf-text'
+import { drawWatermark, type WatermarkSources } from './pdf-watermark'
 
 export type { PlanOptions } from './pdf-plan'
 export type { PageSizeName } from './pdf-layout'
 
 const PRODUCER = 'CabinetMaker'
-
-function isoDate(date: Date): string {
-  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10)
-}
 
 /** Draws a drawings page; returns the scale note for the title block. */
 function drawDrawingsPage(page: PDFPage, fonts: PdfFonts, size: PageSize, spec: DrawingsPage, project: Project): string {
@@ -40,10 +40,10 @@ function drawDrawingsPage(page: PDFPage, fonts: PdfFonts, size: PageSize, spec: 
   return spec.commonScale && Number.isFinite(common) ? scaleNote(common) : 'Not to scale'
 }
 
-function renderPage(page: PDFPage, fonts: PdfFonts, size: PageSize, spec: PlanPage, project: Project, result: PipelineResult, plan: readonly PlanPage[]): string {
+function renderPage(page: PDFPage, fonts: PdfFonts, size: PageSize, spec: PlanPage, project: Project, result: PipelineResult, plan: readonly PlanPage[], brand: CoverBrand): string {
   switch (spec.kind) {
     case 'cover':
-      drawCoverPage({ page, fonts }, size, project, result, plan)
+      drawCoverPage({ page, fonts }, size, project, result, plan, brand)
       return '-'
     case 'drawings':
       return drawDrawingsPage(page, fonts, size, spec, project)
@@ -61,33 +61,55 @@ export function planPageCount(project: Project, result: PipelineResult, options:
   return buildPagePlan(project, result, options).length
 }
 
-export async function buildPlanPdf(project: Project, result: PipelineResult, options: PlanOptions = {}): Promise<Uint8Array> {
-  const size = pageSizeOf(options)
-  const date = options.date ?? new Date()
-  const plan = buildPagePlan(project, result, options)
-  const doc = await PDFDocument.create()
-  doc.setTitle(`${project.name} - plan set`)
+/** Title, author, subject and keywords from the PDF settings (searchable in PDF viewers). */
+function setMetadata(doc: PDFDocument, title: string, settings: PdfSettings, date: Date): void {
+  const company = settings.company.trim()
+  const client = settings.client.trim()
+  const author = settings.designer.trim() || company
+  doc.setTitle(`${title} - plan set`)
+  if (author) doc.setAuthor(author)
+  doc.setSubject(['Plan set', client && `for ${client}`, company && `by ${company}`].filter(Boolean).join(' '))
+  doc.setKeywords([company, client, settings.revision.trim(), 'cabinet plans'].filter(Boolean))
   doc.setProducer(PRODUCER)
   doc.setCreator(PRODUCER)
   doc.setCreationDate(date)
   doc.setModificationDate(date)
+}
+
+export async function buildPlanPdf(project: Project, result: PipelineResult, options: PlanOptions = {}): Promise<Uint8Array> {
+  const settings = resolvePdfSettings(project)
+  const size = pageSizeOf(options, project)
+  const now = options.date ?? new Date()
+  const plan = buildPagePlan(project, result, options)
+  const title = pdfDisplayTitle(project, settings)
+  const doc = await PDFDocument.create()
+  setMetadata(doc, title, settings, now)
   const fonts: PdfFonts = {
     regular: await doc.embedFont(StandardFonts.Helvetica),
     bold: await doc.embedFont(StandardFonts.HelveticaBold),
   }
+  const images = await embedBrandImages(doc, settings)
+  const watermark: WatermarkSources = { text: fonts.bold, image: images.watermark }
+  const { client, company, designer, contact, revision, notes } = settings
+  const brand: CoverBrand = { title, client, company, designer, contact, revision, notes, logo: images.logo }
+  const behind = settings.watermark.layer === 'behind'
   const units = project.units === 'metric' ? 'mm' : 'inches'
+  const date = titleBlockDate(settings, now)
   plan.forEach((spec, i) => {
     const page = doc.addPage([size.width * PT_PER_MM, size.height * PT_PER_MM])
-    const scale = renderPage(page, fonts, size, spec, project, result, plan)
+    if (behind) drawWatermark(page, settings.watermark, watermark)
+    const scale = renderPage(page, fonts, size, spec, project, result, plan, brand)
     drawFrameAndTitleBlock({ page, fonts }, size, {
-      projectName: project.name,
+      ...brand,
+      projectName: title,
       title: spec.title,
       scale,
-      date: isoDate(date),
+      date,
       units,
       pageNo: i + 1,
       pageCount: plan.length,
     })
+    if (!behind) drawWatermark(page, settings.watermark, watermark)
   })
   return doc.save()
 }

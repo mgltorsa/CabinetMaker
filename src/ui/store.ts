@@ -21,6 +21,8 @@ import type {
   UnitSystem,
 } from '@/core/types'
 import { createPreset } from '@/engine/presets'
+import { withPdfSettings, withWatermark } from '@/core/pdf-settings'
+import type { PdfSettings, PdfWatermark } from '@/core/types'
 import { browserStorage, loadProject, REJECTED_STORAGE_KEY } from './persistence'
 import { notify } from './toast'
 import * as ops from './projectOps'
@@ -102,6 +104,9 @@ export interface DesignerActions {
   updateNest: (patch: Partial<NestSettings>) => void
   updateEstimate: (patch: Partial<Omit<EstimateSettings, 'labor'>>) => void
   updateLabor: (patch: Partial<EstimateSettings['labor']>) => void
+  /** Plan-book PDF: title block fields, sections, page size, images. */
+  updatePdfSettings: (patch: Partial<Omit<PdfSettings, 'watermark'>>) => void
+  updateWatermark: (patch: Partial<PdfWatermark>) => void
 }
 
 export interface DesignerState extends DesignerActions {
@@ -194,6 +199,8 @@ export function createDesignerStore(initial: Project = createProject()): Designe
       updateNest: (patch) => edit((p) => ops.updateNest(p, patch)),
       updateEstimate: (patch) => edit((p) => ops.updateEstimate(p, patch)),
       updateLabor: (patch) => edit((p) => ops.updateLabor(p, patch)),
+      updatePdfSettings: (patch) => edit((p) => withPdfSettings(p, patch)),
+      updateWatermark: (patch) => edit((p) => withWatermark(p, patch)),
     }
   })
 }

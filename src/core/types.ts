@@ -355,6 +355,8 @@ export interface Project {
   nest: NestSettings
   estimate: EstimateSettings
   room: Room | null
+  /** Plan-book PDF title block, branding and sections; defaults when absent. */
+  pdf?: PdfSettings
 }
 
 // ─── Engine output ──────────────────────────────────────────────────────────
@@ -652,4 +654,59 @@ export interface PanelFrame {
   x: SignedAxis
   y: SignedAxis
   z: SignedAxis
+}
+
+// ─── Plan-book PDF settings ─────────────────────────────────────────────────
+
+export type PdfPageSize = 'letter' | 'a4'
+/** Plan-book sections that can be switched off. */
+export type PdfSectionKey = 'cover' | 'elevations' | 'panels' | 'sheets' | 'cutList' | 'bom' | 'estimate'
+export type PdfDateMode = 'today' | 'fixed'
+export type WatermarkKind = 'image' | 'text'
+export type WatermarkPlacement = 'centre' | 'tiled' | 'corner'
+/** Behind the drawings (drawn first) or over them (drawn last). */
+export type WatermarkLayer = 'behind' | 'over'
+
+/**
+ * A PNG or JPEG as a `data:image/png;base64,…` / `data:image/jpeg;base64,…`
+ * URL. Untrusted: validated by magic bytes and size before use.
+ */
+export type ImageDataUrl = string
+
+export interface PdfWatermark {
+  enabled: boolean
+  kind: WatermarkKind
+  /** Text for a text watermark, e.g. "DRAFT". */
+  text: string
+  /** 0.05–0.5. */
+  opacity: number
+  /** Watermark width as a percentage of the page width. */
+  sizePercent: number
+  /** Counter-clockwise, degrees. */
+  rotationDeg: number
+  placement: WatermarkPlacement
+  layer: WatermarkLayer
+}
+
+export interface PdfSettings {
+  /** Shown as the project title; blank uses the project name. */
+  title: string
+  client: string
+  company: string
+  designer: string
+  /** Address or contact line. */
+  contact: string
+  /** e.g. "Rev B". */
+  revision: string
+  dateMode: PdfDateMode
+  /** `YYYY-MM-DD` used when `dateMode` is `fixed`; may be blank otherwise. */
+  fixedDate: string
+  pageSize: PdfPageSize
+  sections: Record<PdfSectionKey, boolean>
+  /** Notes printed on the cover. */
+  notes: string
+  logo: ImageDataUrl | null
+  /** Image watermark; `null` uses the logo. */
+  watermarkImage: ImageDataUrl | null
+  watermark: PdfWatermark
 }

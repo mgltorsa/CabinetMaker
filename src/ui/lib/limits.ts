@@ -45,3 +45,10 @@ export const MAX_SHELF_PIN_DIAMETER: Mm = 12
 /** Tabs: spacing bounded below and width above, so spacing > width always holds. */
 export const MIN_TAB_SPACING: Mm = 50
 export const MAX_TAB_WIDTH: Mm = 40
+
+/**
+ * Plan-book PDF settings: watermark opacity / size / rotation, text lengths and
+ * the logo and watermark image caps. Defined next to the settings so the PDF
+ * renderer (a domain module) clamps to the same bounds.
+ */
+export { PDF_LIMITS } from '@/core/pdf-settings'

@@ -4,8 +4,12 @@
  *
  * Order: cover · per cabinet elevations (front + side) · panel details (grid)
  * · one page per nested sheet · cut list · BOM · estimate summary.
+ * Sections switched off in `project.pdf.sections` are left out (the cover is
+ * kept when nothing else would remain).
  */
 import type { Drawing, Material, Project } from '@/core/types'
+import { resolvePdfSettings } from '@/core/pdf-settings'
+import type { PdfSectionKey } from '@/core/types'
 import { formatLength } from '@/core/units'
 import type { PipelineResult } from '@/pipeline'
 import { frontElevation } from './front-elevation'
@@ -15,9 +19,9 @@ import { sheetLayout } from './sheet-layout'
 import { sideElevation } from './side-elevation'
 
 export interface PlanOptions {
-  /** Landscape page size; Letter by default. */
+  /** Landscape page size; the project's PDF settings (Letter by default) when absent. */
   pageSize?: PageSizeName
-  /** Date printed in the title block and PDF metadata; now by default. */
+  /** PDF metadata date, and the title-block date unless the settings fix one; now by default. */
   date?: Date
 }
 
@@ -162,15 +166,32 @@ function bomRows(result: PipelineResult): string[][] {
   ])
 }
 
-export function pageSizeOf(options: PlanOptions): PageSize {
-  return PAGE_SIZES[options.pageSize ?? 'letter']
+export function pageSizeOf(options: PlanOptions, project?: Pick<Project, 'pdf'>): PageSize {
+  return PAGE_SIZES[options.pageSize ?? (project ? resolvePdfSettings(project).pageSize : 'letter')]
+}
+
+/** Which `PdfSettings.sections` toggle controls each plan section. */
+const SECTION_KEY: Readonly<Record<PlanSection, PdfSectionKey>> = {
+  Cover: 'cover',
+  Elevations: 'elevations',
+  'Panel details': 'panels',
+  'Sheet layouts': 'sheets',
+  'Cut list': 'cutList',
+  'Bill of materials': 'bom',
+  Estimate: 'estimate',
+}
+
+/** Pages whose section is switched on; the cover alone when none is. */
+function selectSections(pages: PlanPage[], sections: Readonly<Record<PdfSectionKey, boolean>>): PlanPage[] {
+  const kept = pages.filter((p) => sections[SECTION_KEY[p.section]])
+  return kept.length > 0 ? kept : pages.filter((p) => p.kind === 'cover')
 }
 
 export function buildPagePlan(project: Project, result: PipelineResult, options: PlanOptions = {}): PlanPage[] {
-  const perPage = tableRowsPerPage(pageSizeOf(options))
+  const perPage = tableRowsPerPage(pageSizeOf(options, project))
   const cutCols = [r('#', 0.5), l('Cabinet', 2), l('Part', 2.4), l('Material', 2.6), r('Length', 1.1), r('Width', 1.1), r('Thick', 0.9), l('Grain', 0.9), r('Ops', 0.6)]
   const bomCols = [l('Category', 1), l('Description', 3.2), l('Manufacturer', 1.4), l('SKU', 1.8), r('Qty', 0.7), l('Unit', 0.7), r('Unit cost', 1.3), r('Total', 1.3)]
-  return [
+  const pages: PlanPage[] = [
     { kind: 'cover', section: 'Cover', title: 'Cover' },
     ...elevationPages(project, result),
     ...panelPages(project, result),
@@ -179,4 +200,5 @@ export function buildPagePlan(project: Project, result: PipelineResult, options:
     ...tablePages('Bill of materials', 'Bill of materials', bomCols, bomRows(result), perPage),
     { kind: 'estimate', section: 'Estimate', title: 'Estimate summary' },
   ]
+  return selectSections(pages, resolvePdfSettings(project).sections)
 }
