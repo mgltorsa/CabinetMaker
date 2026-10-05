@@ -48,6 +48,24 @@ export interface ManifestCabinet {
   extras: Extras
 }
 
+/** One placed design asset in `scene/placed-assets.glb` (room space). */
+export interface ManifestAsset {
+  id: string
+  name: string
+  assetId: string
+  positionMm: { x: number; y: number; z: number }
+  rotationYDeg: number
+  sizeMm: { x: number; y: number; z: number }
+}
+
+/** Placed design assets (furniture, appliances, lights): one GLB laid out in room space. */
+export interface ManifestSceneAssets {
+  glb: string
+  /** Room space: origin at the back-left floor corner, +X along the back wall, +Z into the room. */
+  space: 'room'
+  assets: ManifestAsset[]
+}
+
 export interface BundleManifest {
   format: typeof MANIFEST_FORMAT
   version: typeof MANIFEST_VERSION
@@ -63,6 +81,8 @@ export interface BundleManifest {
   materials: ManifestMaterial[]
   /** Project totals. */
   hardware: ManifestHardware[]
+  /** Present when the project has visible placed assets. */
+  sceneAssets?: ManifestSceneAssets
 }
 
 /** One cabinet's build plus the bundle paths chosen for it. */

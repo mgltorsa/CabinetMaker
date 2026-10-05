@@ -5,15 +5,18 @@
  */
 import { strToU8, zipSync, type Zippable } from 'fflate'
 import type { Project, ProjectBuild } from '@/core/types'
+import { placedAssetsToGlb } from './assetsGlb'
 import { BLENDER_SCRIPT, BLENDER_SCRIPT_NAME } from './blenderScript'
 import { cabinetToGlb } from './cabinetGlb'
-import { buildManifest, CABINETS_DIR, type BundleManifest, type CabinetEntry } from './manifest'
+import { buildManifest, CABINETS_DIR, type BundleManifest, type CabinetEntry, type ManifestSceneAssets } from './manifest'
 import { README_NAME, readmeText } from './readme'
 import { cabinetSlugs, slugify } from './slug'
 
 export type { BundleManifest } from './manifest'
 
 export const MANIFEST_NAME = 'manifest.json'
+/** Placed design assets, one GLB in room space. */
+export const SCENE_ASSETS_GLB = 'scene/placed-assets.glb'
 
 /** Zip entry timestamp when none is given: fixed so the same project gives the same bytes. */
 const DEFAULT_MODIFIED = new Date(2020, 0, 1)
@@ -30,6 +33,25 @@ export interface BlenderBundleOptions {
   modified?: Date
   /** Include separately supplied countertops (default true, like the 3D view). */
   includeSuppliedTop?: boolean
+  /** Include visible placed design assets as `scene/placed-assets.glb` (default true). */
+  includeAssets?: boolean
+}
+
+function sceneAssetsEntry(project: Project): ManifestSceneAssets | null {
+  const visible = (project.assets ?? []).filter((a) => a.visible)
+  if (visible.length === 0) return null
+  return {
+    glb: SCENE_ASSETS_GLB,
+    space: 'room',
+    assets: visible.map((a) => ({
+      id: a.id,
+      name: a.name,
+      assetId: a.assetId,
+      positionMm: { ...a.position },
+      rotationYDeg: a.rotationYDeg,
+      sizeMm: { ...a.size },
+    })),
+  }
 }
 
 /** Build the bundle zip for every cabinet in the project. */
@@ -50,8 +72,10 @@ export function buildBlenderBundle(project: Project, result: { build: ProjectBui
     entries.push({ cabinet, build, slug, glb: `${CABINETS_DIR}/${slug}.glb`, thumbnail: hasThumbnail ? `${CABINETS_DIR}/${slug}.png` : null })
   }
 
-  const manifest = buildManifest(project, entries, skipped, includeSuppliedTop)
+  const sceneAssets = (options.includeAssets ?? true) ? sceneAssetsEntry(project) : null
+  const manifest: BundleManifest = { ...buildManifest(project, entries, skipped, includeSuppliedTop), ...(sceneAssets ? { sceneAssets } : {}) }
   const files: Zippable = {}
+  if (sceneAssets) files[SCENE_ASSETS_GLB] = [placedAssetsToGlb(project.assets ?? []), { level: DEFLATE_LEVEL }]
   for (const e of entries) {
     files[e.glb] = [cabinetToGlb(e.cabinet, e.build, project, { includeSuppliedTop, includePulls: true }), { level: DEFLATE_LEVEL }]
     const png = options.thumbnails?.get(e.cabinet.id)

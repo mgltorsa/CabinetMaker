@@ -1,5 +1,6 @@
 import {
   PROJECT_SCHEMA_VERSION,
+  type AssetLight,
   type Bay,
   type Cabinet,
   type ConstructionMethod,
@@ -12,6 +13,7 @@ import {
   type MachinePoint,
   type Material,
   type NestSettings,
+  type PlacedAsset,
   type Project,
   type Room,
   type SceneModel,
@@ -20,6 +22,9 @@ import {
   type Tool,
 } from '@/core/types'
 import {
+  ASSET_LIFT,
+  ASSET_ROTATION,
+  ASSET_SIZE,
   CABINET_DIMENSION,
   EXTRA_QTY,
   FLOOR_HEIGHT,
@@ -38,6 +43,8 @@ import {
   MAX_TAB_WIDTH,
   MATERIAL_THICKNESS,
   MAX_MODELS,
+  MAX_ASSETS,
+  LIGHT_INTENSITY,
   MIN_SHELF_PIN_SPACING,
   MODEL_LIFT,
   MODEL_NATIVE_SIZE,
@@ -356,6 +363,27 @@ const sceneModel = obj<SceneModel>({
   visible: bool,
 })
 
+const assetSize = numIn(ASSET_SIZE)
+
+const assetLight = obj<AssetLight>({
+  on: bool,
+  intensity: numIn(LIGHT_INTENSITY),
+  color: hexColor,
+})
+
+const placedAsset = obj<PlacedAsset>({
+  id: str,
+  // Unknown catalog ids are kept (a newer version's asset) and drawn as a box.
+  assetId: refine(str, (v, p) => (v.length > 0 ? null : `${p} must not be empty`)),
+  name: str,
+  position: obj({ x: roomCoord, y: numIn(ASSET_LIFT), z: roomCoord }),
+  rotationYDeg: numIn(ASSET_ROTATION),
+  size: obj({ x: assetSize, y: assetSize, z: assetSize }),
+  color: optional(hexColor),
+  visible: bool,
+  light: optional(assetLight),
+})
+
 const projectShape = obj<Project>({
   schemaVersion: oneOf(PROJECT_SCHEMA_VERSION),
   id: str,
@@ -371,6 +399,7 @@ const projectShape = obj<Project>({
   room: nullable(room),
   pdf: optional(pdfSettings),
   models: optional(uniqueList(sceneModel, { max: MAX_MODELS })),
+  assets: optional(uniqueList(placedAsset, { max: MAX_ASSETS })),
 })
 
 /** Material references every cabinet needs before the engine can build it. */

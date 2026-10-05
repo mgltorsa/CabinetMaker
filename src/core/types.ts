@@ -463,6 +463,38 @@ export interface SceneModel {
   visible: boolean
 }
 
+// ─── Placed design assets (furniture, appliances, lights, decor) ────────────
+//
+// Parametric objects from the built-in asset catalog (`src/assets`), placed in
+// room space for design and presentation only: they never reach the engine,
+// cut list, nest, CAM or estimate. Unlike `SceneModel` they need no file bytes.
+
+/** A light asset's switchable light source. */
+export interface AssetLight {
+  on: boolean
+  /** Brightness multiplier on the catalog light's nominal output (1 = nominal). */
+  intensity: number
+  /** Light colour, `#rrggbb`. */
+  color: string
+}
+
+export interface PlacedAsset {
+  id: Id
+  /** Catalog entry id (e.g. `fridge`); an unknown id renders as a plain box. */
+  assetId: string
+  name: string
+  /** Room-space floor point under the footprint centre, mm (y = lift above the floor). */
+  position: Vec3
+  rotationYDeg: number
+  /** Overall width (x) × height (y) × depth (z), mm; the catalog shape stretches to fit. */
+  size: Vec3
+  /** Main colour `#rrggbb`; absent = the catalog default. */
+  color?: string
+  visible: boolean
+  /** Light assets only. */
+  light?: AssetLight
+}
+
 // ─── Project (the only persisted document) ──────────────────────────────────
 
 export const PROJECT_SCHEMA_VERSION = 1
@@ -484,6 +516,8 @@ export interface Project {
   pdf?: PdfSettings
   /** Imported models (phase 6). Absent in projects saved before models existed. */
   models?: SceneModel[]
+  /** Placed catalog assets (design only). Absent in projects saved before assets existed. */
+  assets?: PlacedAsset[]
 }
 
 // ─── Engine output ──────────────────────────────────────────────────────────

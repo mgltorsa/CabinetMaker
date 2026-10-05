@@ -17,6 +17,12 @@ const CAMERA_DISTANCE = 3.1
 const DIMENSION_COLOR = '#2f4a6b'
 const HOVER_EMISSIVE = '#f0a640'
 
+/** Daylight vs evening: evening dims the sky and sun so placed lights read. */
+const LIGHTING = {
+  day: { background: '#e7e2da', hemisphere: 0.75, sun: 1.05, fill: 0.35 },
+  evening: { background: '#24262d', hemisphere: 0.1, sun: 0.06, fill: 0.03 },
+} as const
+
 const FINISHES: Record<Finish, { color: string; roughness: number }> = {
   carcass: { color: '#f3f0ea', roughness: 0.55 },
   front: { color: '#efebe4', roughness: 0.45 },
@@ -261,12 +267,15 @@ export type Viewer3DProps = {
   onPick: (cabinetId: string) => void
   /** Dimension labels (by `DimensionSpec.id`) that can be edited in place. */
   dimensionEdits?: DimensionEdits
-  /** Room shell and imported models (sidebar 05). */
+  /** Room shell, imported models and placed assets (sidebar 05). */
   extras?: SceneExtrasProps
+  /** Evening lighting (dim daylight). */
+  isEvening?: boolean
 }
 
 /** WebGL view; loaded client-side only (see ThreeView). */
-export default function Viewer3D({ scene, focusKey, hoveredPartId, onHover, onPick, dimensionEdits, extras }: Viewer3DProps) {
+export default function Viewer3D({ scene, focusKey, hoveredPartId, onHover, onPick, dimensionEdits, extras, isEvening = false }: Viewer3DProps) {
+  const lighting = isEvening ? LIGHTING.evening : LIGHTING.day
   const floorSize = Math.max(8, Math.ceil(scene.extent * 6))
   const floorTexture = useFloorTexture(floorSize / 1.6)
   const [tx, ty, tz] = scene.focus.target
@@ -285,11 +294,11 @@ export default function Viewer3D({ scene, focusKey, hoveredPartId, onHover, onPi
         dpr={[1, 2]}
         onPointerMissed={() => onHover(null)}
       >
-        <color attach="background" args={['#e7e2da']} />
-        <hemisphereLight args={['#fffaf2', '#b89a6e', 0.75]} />
+        <color attach="background" args={[lighting.background]} />
+        <hemisphereLight args={['#fffaf2', '#b89a6e', lighting.hemisphere]} />
         <directionalLight
           position={[tx + 2.2, 4.5, tz + 3.2]}
-          intensity={1.05}
+          intensity={lighting.sun}
           castShadow
           shadow-mapSize={[2048, 2048]}
           shadow-bias={-0.0004}
@@ -298,7 +307,7 @@ export default function Viewer3D({ scene, focusKey, hoveredPartId, onHover, onPi
           shadow-camera-top={shadowSpan}
           shadow-camera-bottom={-shadowSpan}
         />
-        <directionalLight position={[-3, 2.5, 2]} intensity={0.35} />
+        <directionalLight position={[-3, 2.5, 2]} intensity={lighting.fill} />
 
         {/* Floor and back wall: the cabinets' backs sit on the wall plane (z = 0). */}
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, floorSize / 2 - 0.5]} receiveShadow>

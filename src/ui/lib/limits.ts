@@ -103,3 +103,15 @@ export const MODEL_NATIVE_SIZE: Bounds = { min: 0, max: 1e7 }
 export const ROOM_SIZE: Bounds = { min: 500, max: MAX_LENGTH }
 export const ROOM_HEIGHT: Bounds = { min: 1000, max: 6000 }
 export const WALL_THICKNESS: Bounds = { min: 10, max: 1000 }
+// ─── Placed design assets ───────────────────────────────────────────────────
+
+/** Placed catalog assets per project. */
+export const MAX_ASSETS = 200
+/** Asset width / height / depth (mm): a 10 mm trinket up to a 10 m rug. */
+export const ASSET_SIZE: Bounds = { min: 10, max: MAX_LENGTH }
+/** Height of an asset's base above the floor (mm): up to the tallest room. */
+export const ASSET_LIFT: Bounds = { min: 0, max: 6000 }
+/** Asset rotation about the vertical axis (degrees). */
+export const ASSET_ROTATION: Bounds = { min: -360, max: 360 }
+/** Light brightness multiplier (1 = the catalog light's nominal output). */
+export const LIGHT_INTENSITY: Bounds = { min: 0, max: 10 }
