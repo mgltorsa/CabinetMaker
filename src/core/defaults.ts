@@ -17,14 +17,16 @@ import {
 /**
  * Starter catalog. Prices are placeholders and SKUs are examples: the shop must
  * verify manufacturer data and override costs (see plan "Risks").
+ * Colours match the 3D view's finish colours: white melamine-faced ply, dark
+ * backs, birch drawer boxes, paint-grade MDF fronts, maple face frames.
  */
 export const DEFAULT_MATERIALS: Material[] = [
-  { kind: 'sheet', id: 'ply-18', name: '18 mm plywood', thickness: 18, sheetLength: 2440, sheetWidth: 1220, grained: true, costPerSheet: 85 },
-  { kind: 'sheet', id: 'ply-6', name: '6 mm plywood (backs)', thickness: 6, sheetLength: 2440, sheetWidth: 1220, grained: true, costPerSheet: 35 },
+  { kind: 'sheet', id: 'ply-18', name: '18 mm plywood', thickness: 18, sheetLength: 2440, sheetWidth: 1220, grained: true, costPerSheet: 85, color: '#f3f0ea' },
+  { kind: 'sheet', id: 'ply-6', name: '6 mm plywood (backs)', thickness: 6, sheetLength: 2440, sheetWidth: 1220, grained: true, costPerSheet: 35, color: '#5a5651' },
   // 4×8 rather than the common 5×5 so it fits the default router table (Y 1250).
-  { kind: 'sheet', id: 'bb-12', name: '12 mm Baltic birch 4×8 (drawer boxes)', thickness: 12, sheetLength: 2440, sheetWidth: 1220, grained: true, costPerSheet: 95 },
-  { kind: 'sheet', id: 'mdf-18', name: '18 mm MDF (paint-grade fronts)', thickness: 18, sheetLength: 2440, sheetWidth: 1220, grained: false, costPerSheet: 55 },
-  { kind: 'linear', id: 'maple-19x63', name: 'Maple 19 × 63 mm (face frames)', thickness: 19, width: 63, stockLength: 2440, costPerMetre: 12 },
+  { kind: 'sheet', id: 'bb-12', name: '12 mm Baltic birch 4×8 (drawer boxes)', thickness: 12, sheetLength: 2440, sheetWidth: 1220, grained: true, costPerSheet: 95, color: '#e3cea2' },
+  { kind: 'sheet', id: 'mdf-18', name: '18 mm MDF (paint-grade fronts)', thickness: 18, sheetLength: 2440, sheetWidth: 1220, grained: false, costPerSheet: 55, color: '#efebe4' },
+  { kind: 'linear', id: 'maple-19x63', name: 'Maple 19 × 63 mm (face frames)', thickness: 19, width: 63, stockLength: 2440, costPerMetre: 12, color: '#dcc59f' },
 ]
 
 /*

@@ -45,3 +45,8 @@ export const MAX_SHELF_PIN_DIAMETER: Mm = 12
 /** Tabs: spacing bounded below and width above, so spacing > width always holds. */
 export const MIN_TAB_SPACING: Mm = 50
 export const MAX_TAB_WIDTH: Mm = 40
+
+/** Material (stock) thickness: veneers up to slabs; more is a typo that would explode CAM passes. */
+export const MATERIAL_THICKNESS: Bounds = { min: 0.1, max: 200 }
+/** Sheet length / width and linear board width / stock length. */
+export const STOCK_SIZE: Bounds = { min: 1, max: MAX_LENGTH }

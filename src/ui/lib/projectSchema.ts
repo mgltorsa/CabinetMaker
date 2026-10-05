@@ -27,12 +27,15 @@ import {
   MAX_SHELF_PIN_DIAMETER,
   MAX_SHELVES,
   MAX_TAB_WIDTH,
+  MATERIAL_THICKNESS,
   MIN_SHELF_PIN_SPACING,
   MIN_STEP_DOWN,
   MIN_TAB_SPACING,
   SECTION_SIZE,
+  STOCK_SIZE,
   TOOL_NUMBER,
 } from './limits'
+import { isHexColor } from './materials'
 import {
   arrayOf,
   bool,
@@ -143,25 +146,31 @@ const cabinet = refine(
   (c, p) => uniqueBayIds(c.sections, p),
 )
 
+const materialThickness = numIn(MATERIAL_THICKNESS)
+const stockSize = numIn(STOCK_SIZE)
+const hexColor: Check<string> = (v, p) => (typeof v === 'string' && isHexColor(v) ? null : `${p} must be a #rrggbb colour`)
+
 const sheetMaterial = obj<SheetMaterial>({
   kind: oneOf('sheet'),
   id: str,
   name: str,
-  thickness: size,
-  sheetLength: size,
-  sheetWidth: size,
+  thickness: materialThickness,
+  sheetLength: stockSize,
+  sheetWidth: stockSize,
   grained: bool,
   costPerSheet: nonNegative(),
+  color: optional(hexColor),
 })
 
 const linearMaterial = obj<LinearMaterial>({
   kind: oneOf('linear'),
   id: str,
   name: str,
-  thickness: size,
-  width: size,
-  stockLength: size,
+  thickness: materialThickness,
+  width: stockSize,
+  stockLength: stockSize,
   costPerMetre: nonNegative(),
+  color: optional(hexColor),
 })
 
 const material: Check<Material> = (v, p) => {

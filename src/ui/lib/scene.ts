@@ -7,7 +7,7 @@
  * Every cabinet's back sits on the wall plane (cabinet space z = 0).
  */
 import { panelToCabinet } from '@/core/panel'
-import type { Cabinet, HoleOp, Part, PartGroup, ProjectBuild, SignedAxis, UnitSystem } from '@/core/types'
+import type { Cabinet, HoleOp, Material, Part, PartGroup, ProjectBuild, SignedAxis, UnitSystem } from '@/core/types'
 import { formatLength } from '@/core/units'
 import { synthesizedTop } from '@/drawings/front-elevation'
 import { hingeSide } from '@/drawings/part-geometry'
@@ -54,6 +54,8 @@ export interface MeshSpec {
   /** Rotation about +Y, radians (open doors). */
   rotationY: number
   finish: Finish
+  /** The part material's colour (`#rrggbb`); absent = the viewer's finish colour. */
+  color?: string
 }
 
 /** A bar pull between two holes on a front's show face. */
@@ -99,6 +101,8 @@ export interface SceneOptions {
   units: UnitSystem
   /** Cabinet that gets dimension lines. */
   selectedCabinetId: string | null
+  /** Project materials; a part takes its material's `color` when it has one. */
+  materials?: readonly Material[]
 }
 
 // ─── Part classification ────────────────────────────────────────────────────
@@ -242,8 +246,10 @@ export function buildScene(build: ProjectBuild, cabinets: readonly Cabinet[], vi
   // `|| 0` folds -0 (from negated axes) into 0.
   const dir = (v: V): Vec3Tuple => [v.x || 0, v.y || 0, v.z || 0]
 
+  const colorByMaterial = new Map((options.materials ?? []).flatMap((mat) => (mat.color ? [[mat.id, mat.color] as const] : [])))
   const meshes = placed.map(({ part, motion, centre }): MeshSpec => {
     const { min, max } = part.bounds
+    const color = colorByMaterial.get(part.materialId)
     return {
       partId: part.id,
       cabinetId: part.cabinetId,
@@ -251,6 +257,7 @@ export function buildScene(build: ProjectBuild, cabinets: readonly Cabinet[], vi
       size: [Math.max(max.x - min.x, 0.1) / MM_PER_M, Math.max(max.y - min.y, 0.1) / MM_PER_M, Math.max(max.z - min.z, 0.1) / MM_PER_M],
       rotationY: motion.angle,
       finish: FINISH[part.group],
+      ...(color === undefined ? {} : { color }),
     }
   })
 

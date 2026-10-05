@@ -54,6 +54,8 @@ export interface SheetMaterial {
   sheetWidth: Mm
   grained: boolean
   costPerSheet: number
+  /** Display colour (`#rrggbb`) for the 3D view; absent = default finish colour. */
+  color?: string
 }
 
 export interface LinearMaterial {
@@ -66,6 +68,8 @@ export interface LinearMaterial {
   /** Stock board length bought. */
   stockLength: Mm
   costPerMetre: number
+  /** Display colour (`#rrggbb`) for the 3D view; absent = default finish colour. */
+  color?: string
 }
 
 export type Material = SheetMaterial | LinearMaterial
