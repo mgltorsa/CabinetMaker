@@ -12,6 +12,15 @@ const HR = '-'.repeat(72)
 export function readmeText(manifest: BundleManifest): string {
   const cabinets = manifest.cabinets.map((c) => `  ${c.slug}.glb${c.thumbnail ? ` + ${c.slug}.png` : ''}  ${c.name} (${c.widthMm} x ${c.heightMm} x ${c.depthMm} mm)`)
   const skipped = manifest.skipped.map((s) => `  Not exported: ${s.name} (${s.reason})`)
+  const assets = manifest.sceneAssets
+    ? [
+        '',
+        `  ${manifest.sceneAssets.glb}  ${manifest.sceneAssets.assets.length} placed design asset(s) (furniture,`,
+        '                           appliances, lights, decor) in room space, simple meshes:',
+        '                           origin at the back-left floor corner, metres. Import it',
+        '                           with File > Import > glTF 2.0; the library script skips it.',
+      ]
+    : []
   return [
     `CabinetMaker - Blender / Home Builder bundle`,
     `Project: ${manifest.project.name}`,
@@ -27,6 +36,7 @@ export function readmeText(manifest: BundleManifest): string {
     '',
     ...cabinets,
     ...skipped,
+    ...assets,
     '',
     'MAKE THE LIBRARY (Blender 4.x)',
     '',

@@ -51,6 +51,10 @@ export interface ViewToggles {
   room: boolean
   /** Imported 3D models. */
   models: boolean
+  /** Placed catalog assets (furniture, appliances, lights, decor). */
+  assets: boolean
+  /** Evening lighting: dim daylight so placed lights read. */
+  evening: boolean
 }
 
 export type ViewToggle = keyof ViewToggles
@@ -66,6 +70,8 @@ export const DEFAULT_VIEW: ViewToggles = {
   back: true,
   room: true,
   models: true,
+  assets: true,
+  evening: false,
 }
 
 /** The numbered sidebar sections; each drives what the main area shows. */

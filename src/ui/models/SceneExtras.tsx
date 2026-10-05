@@ -9,7 +9,8 @@ import { Edges, TransformControls } from '@react-three/drei'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { type RefObject, useEffect, useMemo, useRef, useState } from 'react'
 import { Euler, type Group } from 'three'
-import type { Room, SceneModel } from '@/core/types'
+import type { PlacedAsset, Room, SceneModel } from '@/core/types'
+import { AssetsLayer } from '../assets/AssetsLayer'
 import { MODEL_SCALE } from '../lib/limits'
 import { getDesignerStore } from '../store'
 import { notify } from '../toast'
@@ -45,6 +46,8 @@ export interface SceneExtrasProps {
   models: readonly SceneModel[]
   /** Room-space X (mm) at scene x = 0 (see SceneSpec.centreX). */
   centreX: number
+  /** Placed catalog assets to draw (already filtered by visibility). */
+  assets?: readonly PlacedAsset[]
 }
 
 // ─── Room shell ─────────────────────────────────────────────────────────────
@@ -285,8 +288,8 @@ function ModelView({ model, centreX, isSelected, mode }: { model: SceneModel; ce
   )
 }
 
-/** Everything the room & models feature adds to the 3D view. */
-export function SceneExtras({ room, models, centreX }: SceneExtrasProps) {
+/** Everything the room, models and assets features add to the 3D view. */
+export function SceneExtras({ room, models, centreX, assets = [] }: SceneExtrasProps) {
   const selectedModelId = useModelUi((s) => s.selectedModelId)
   const mode = useModelUi((s) => s.gizmoMode)
   return (
@@ -295,6 +298,7 @@ export function SceneExtras({ room, models, centreX }: SceneExtrasProps) {
       {models.map((m) => (
         <ModelView key={`${m.id}:${m.blobId}`} model={m} centreX={centreX} isSelected={m.id === selectedModelId} mode={mode} />
       ))}
+      {assets.length > 0 && <AssetsLayer assets={assets} centreX={centreX} />}
     </>
   )
 }

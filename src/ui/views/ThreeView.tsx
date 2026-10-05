@@ -31,6 +31,8 @@ export const VISIBILITY_TOGGLES: { key: ViewToggle; label: string }[] = [
   { key: 'back', label: 'Cabinet back' },
   { key: 'room', label: 'Room' },
   { key: 'models', label: 'Models' },
+  { key: 'assets', label: 'Assets' },
+  { key: 'evening', label: 'Evening light' },
 ]
 
 function VisibilityPills() {
@@ -94,8 +96,9 @@ export function ThreeView({ project, result }: ThreeViewProps) {
   const selected = project.cabinets.find((c) => c.id === selectedCabinetId) ?? null
   const dimensionEdits = useDimensionEdits(selected, result.build.cabinets.find((b) => b.cabinetId === selectedCabinetId))
   const models = useMemo(() => (view.models ? (project.models ?? []).filter((m) => m.visible) : []), [view.models, project.models])
-  const extras = useMemo(() => ({ room, models, centreX: scene.centreX }), [room, models, scene.centreX])
-  const isEmpty = scene.meshes.length === 0 && room === null && models.length === 0
+  const assets = useMemo(() => (view.assets ? (project.assets ?? []).filter((a) => a.visible) : []), [view.assets, project.assets])
+  const extras = useMemo(() => ({ room, models, assets, centreX: scene.centreX }), [room, models, assets, scene.centreX])
+  const isEmpty = scene.meshes.length === 0 && room === null && models.length === 0 && assets.length === 0
   const hovered = hoveredPartId === null ? undefined : result.partsById.get(hoveredPartId)
   const cabinetName = hovered ? project.cabinets.find((c) => c.id === hovered.cabinetId)?.name : undefined
 
@@ -117,6 +120,7 @@ export function ThreeView({ project, result }: ThreeViewProps) {
             onPick={selectCabinet}
             dimensionEdits={dimensionEdits}
             extras={extras}
+            isEvening={view.evening}
           />
         </ErrorBoundary>
       )}
