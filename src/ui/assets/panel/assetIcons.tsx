@@ -1,0 +1,71 @@
+'use client'
+
+import {
+  AppWindowIcon,
+  ArmchairIcon,
+  BedDoubleIcon,
+  BookOpenIcon,
+  BoxIcon,
+  CookingPotIcon,
+  DoorOpenIcon,
+  DropletIcon,
+  FanIcon,
+  FlameIcon,
+  FrameIcon,
+  LampCeilingIcon,
+  LampFloorIcon,
+  LampWallUpIcon,
+  LayoutPanelTopIcon,
+  LibraryIcon,
+  LightbulbIcon,
+  type LucideIcon,
+  MicrowaveIcon,
+  RectangleHorizontalIcon,
+  RefrigeratorIcon,
+  SofaIcon,
+  SoupIcon,
+  SproutIcon,
+  TvIcon,
+  UtensilsIcon,
+  WashingMachineIcon,
+  WineIcon,
+  MinusIcon,
+} from 'lucide-react'
+
+/** Thumbnail icon per catalog id; unknown ids get a plain box. */
+const ICONS: Readonly<Record<string, LucideIcon>> = {
+  fridge: RefrigeratorIcon,
+  range: CookingPotIcon,
+  cooktop: FlameIcon,
+  dishwasher: WashingMachineIcon,
+  sink: DropletIcon,
+  'range-hood': FanIcon,
+  microwave: MicrowaveIcon,
+  island: LayoutPanelTopIcon,
+  'bar-stool': UtensilsIcon,
+  sofa: SofaIcon,
+  bed: BedDoubleIcon,
+  'dining-table': RectangleHorizontalIcon,
+  chair: ArmchairIcon,
+  rug: RectangleHorizontalIcon,
+  door: DoorOpenIcon,
+  window: AppWindowIcon,
+  bookshelf: LibraryIcon,
+  plant: SproutIcon,
+  tv: TvIcon,
+  pendant: LampCeilingIcon,
+  'ceiling-light': LightbulbIcon,
+  downlight: LightbulbIcon,
+  'floor-lamp': LampFloorIcon,
+  'wall-sconce': LampWallUpIcon,
+  'led-strip': MinusIcon,
+  vase: WineIcon,
+  books: BookOpenIcon,
+  'picture-frame': FrameIcon,
+  bowl: SoupIcon,
+}
+
+export function AssetIcon({ assetId, className }: { assetId: string; className?: string }) {
+  const Icon = ICONS[assetId] ?? BoxIcon
+  return <Icon aria-hidden="true" className={className} />
+}
